@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: krt-options-terminal
+    runtime: python
+    region: singapore
+    plan: starter              # free plan sleeps and loses today's calls; disks need a paid plan
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    healthCheckPath: /ping
+    disk:
+      name: krt-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: DATA_DIR
+        value: /var/data
+      - key: APP_PASSWORD
+        sync: false
+      - key: BROKER
+        value: angel
+      - key: ANGEL_API_KEY
+        sync: false
+      - key: ANGEL_CLIENT_CODE
+        sync: false
+      - key: ANGEL_MPIN
+        sync: false
+      - key: ANGEL_TOTP_SECRET
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: RISK_PER_TRADE
+        value: "2500"
