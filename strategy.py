@@ -129,6 +129,9 @@ def level_table(candles, lots):
     for s, c in candles.items():
         f = daily_features(c)
         if not f: continue
-        sd = side_of(f); rows.append(dict(sym=s, last=f["cl"], vah=f["vah"], val=f["val"], aw=f["aw"], atr=f["atr"], side=sd or "", date=f["date"],
-                                          trend=bool(sd and trend_ok(f, sd)), score=round(score(f, sd)[0], 1) if sd else None, lot=lots.get(s)))
+        sd = side_of(f); r = dict(sym=s, last=f["cl"], vah=f["vah"], val=f["val"], aw=f["aw"], atr=f["atr"], side=sd or "", date=f["date"],
+                                  trend=bool(sd and trend_ok(f, sd)), score=round(score(f, sd)[0], 1) if sd else None, lot=lots.get(s))
+        if sd:
+            trig, sl = spot_plan(f, sd); tg, R = targets(trig, sl, sd); r.update(trig=trig, sl=sl, t=tg)
+        rows.append(r)
     return rows
