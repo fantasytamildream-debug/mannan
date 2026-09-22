@@ -92,6 +92,9 @@ h3{font:700 18px var(--fc);margin:0 0 8px}
 .flow span.on{background:var(--amber);color:#1a1205}.flow span.done{color:var(--ok)}
 .jc{display:grid;grid-template-columns:1fr 1fr;gap:3px 14px;font-size:13.5px;margin-top:6px}
 .note{color:var(--mute);font-size:13.5px}
+.daynav{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.daynav input.s{width:170px}
+.res{font:700 12.5px var(--fc);padding:3px 7px;border-radius:3px}.res.w{background:color-mix(in srgb,var(--ok) 20%,transparent);color:var(--ok)}.res.l{background:color-mix(in srgb,var(--pe) 20%,transparent);color:var(--pe)}
+.bars{display:flex;align-items:flex-end;gap:2px;height:70px;margin-top:8px}.bars i{flex:1;min-width:2px;border-radius:1px 1px 0 0}
 input.s{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padding:7px 10px;width:200px}
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:10px 16px;border-radius:4px;opacity:0;transition:.2s;pointer-events:none;font-weight:600;z-index:20}
 #toast.on{opacity:1}
@@ -102,18 +105,21 @@ input.s{background:var(--panel2);border:1px solid var(--line);border-radius:3px;
  <div class="bar1"><div class="brand">KRT <b>Options</b> Terminal</div><span id="feed" class="feed disconnected">Connecting…</span>
   <div class="meta"><span id="clock"></span><span id="phase"></span><span id="nifty"></span></div>
   <div class="tools"><button class="ib" id="lang" aria-pressed="false" title="Explanation language">தமிழ்</button><button class="ib" id="snd" aria-pressed="false" title="Sound on new events">🔔 Sound</button></div></div>
- <nav class="tabs" role="tablist"><button data-t="calls" role="tab" aria-selected="true">Calls<span class="n" id="n-calls"></span></button><button data-t="near" role="tab">Near trigger<span class="n" id="n-near"></span></button><button data-t="jack" role="tab">🔥 Jackpot Watch<span class="n" id="n-jack"></span></button><button data-t="perf" role="tab">Performance</button><button data-t="levels" role="tab">Levels</button><button data-t="rules" role="tab">Rules</button></nav>
+ <nav class="tabs" role="tablist"><button data-t="calls" role="tab" aria-selected="true">Calls<span class="n" id="n-calls"></span></button><button data-t="hist" role="tab">History</button><button data-t="near" role="tab">Near trigger<span class="n" id="n-near"></span></button><button data-t="jack" role="tab">🔥 Jackpot Watch<span class="n" id="n-jack"></span></button><button data-t="perf" role="tab">Performance</button><button data-t="levels" role="tab">Levels</button><button data-t="rules" role="tab">Rules</button></nav>
 </header>
 <div id="alertbar" class="warnbar" hidden></div>
 <main>
  <section id="calls"><div class="strip" id="strip"></div><div class="chips" id="chips"></div><div id="callgrid"></div></section>
+ <section id="hist" hidden>
+  <div class="panel pad"><div class="daynav"><button class="btn" id="d-prev" aria-label="Previous day">◀</button><input type="date" id="d-pick" class="s" aria-label="Pick a date"><button class="btn" id="d-next" aria-label="Next day">▶</button><button class="btn" id="d-today">Today</button><button class="btn" id="d-yest">Yesterday</button><span id="d-src"></span></div></div>
+  <div class="strip" id="d-strip"></div><div id="d-body"></div></section>
  <section id="near" hidden><p class="note">Stocks from today's watchlist, closest to their trigger first. No entry until a 5-minute candle closes beyond the trigger and every check passes.</p><div class="list" id="nearlist"></div></section>
  <section id="jack" hidden><div class="panel pad"><h3>🔥 Jackpot Watch: strong-move candidates</h3><p class="note">Setups with a tight 3-day range (coil) that can break out hard. A 🔥 call needs all five: coil, volume at 1.5× pace, first-5-minute range break, NIFTY in the same direction, and room to T1. This marks a stronger setup; it does <b>not</b> promise 2× or 5× and is not a win probability. Whether these filters actually help is tracked in Performance.</p></div><div class="grid" id="jackgrid"></div></section>
  <section id="perf" hidden>
   <div class="panel pad"><h3>Forward calls (recorded live by this terminal)</h3><p class="note" id="perf-note"></p><div class="strip" id="perfstrip"></div>
    <div class="chips" id="perfchips"><button class="chip" data-p="all" aria-pressed="true">All calls</button><button class="chip" data-p="strong" aria-pressed="false">🔥 only</button><button class="chip" data-p="mine" aria-pressed="false">Trades I took</button></div>
    <div class="scroll"><table class="t" id="histtbl"></table></div></div>
-  <div class="panel pad" style="opacity:.85"><h3>Old package backtest <span class="pill bad">Unverified</span></h3><p class="note" id="btnote"></p></div>
+  <div class="panel pad"><h3>Old package history (zip, 2021 – 16 Sep 2026) <span class="pill bad">Unverified</span></h3><div class="note" id="btnote"></div></div>
  </section>
  <section id="levels" hidden><div class="panel"><div class="pad" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">Levels for today</h3><input class="s" id="lvq" placeholder="Search symbol" aria-label="Search symbol"><span class="note" id="lvnote"></span></div><div class="scroll" id="lvtbl"></div></div></section>
  <section id="rules" hidden><div class="panel pad" id="rulebox"></div></section>
@@ -131,8 +137,8 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('on'),2600)}
 const TA=()=>U.lang==='ta';
 const SRC=live=>live?'<span class="src live">LIVE</span>':'<span class="src est" title="Estimated from Black-Scholes, not a traded price">EST</span>';
-const STAT={ACTIVE:['Active','ok'],CLOSED:['Closed','mute'],NEAR:['Near trigger','am'],BREAKOUT:['Breakout · wait for candle close','am'],WATCHING:['Watching','mute'],BLOCKED:['Not taken','bad'],INVALID:['Invalid','bad'],EXPIRED:['Expired','mute']};
-const TAST={ACTIVE:'Active',CLOSED:'முடிந்தது',NEAR:'Trigger அருகில்',BREAKOUT:'Breakout · candle close காத்திருக்கவும்',WATCHING:'கவனிப்பில்',BLOCKED:'எடுக்கப்படவில்லை',INVALID:'ரத்து',EXPIRED:'நேரம் முடிந்தது'};
+const STAT={STALE:['Incomplete · server stopped','am'],ACTIVE:['Active','ok'],CLOSED:['Closed','mute'],NEAR:['Near trigger','am'],BREAKOUT:['Breakout · wait for candle close','am'],WATCHING:['Watching','mute'],BLOCKED:['Not taken','bad'],INVALID:['Invalid','bad'],EXPIRED:['Expired','mute']};
+const TAST={STALE:'முழுமையில்லை',ACTIVE:'Active',CLOSED:'முடிந்தது',NEAR:'Trigger அருகில்',BREAKOUT:'Breakout · candle close காத்திருக்கவும்',WATCHING:'கவனிப்பில்',BLOCKED:'எடுக்கப்படவில்லை',INVALID:'ரத்து',EXPIRED:'நேரம் முடிந்தது'};
 
 /* ---------------- data ---------------- */
 async function j(u){const r=await fetch(u,{cache:'no-store'});if(r.status===401)throw Error('login');if(!r.ok)throw Error(r.status);return r.json()}
@@ -173,7 +179,8 @@ function explain(c){const ce=c.side==='CE',f=c.f,fails=(c.checks||[]).filter(x=>
     case'INVALID':return `Entry-க்கு முன்பே SL level ${f2(c.sl)} உடைந்தது. இந்த setup இன்று ரத்து.`;
     case'EXPIRED':return `Cut-off நேரத்திற்குள் confirmed entry வரவில்லை. இன்று இந்த stock-ல் trade இல்லை.`;
     case'ACTIVE':{const h=c.hits.map(x=>x.name);return `${c.sym} ${c.entry.bar} 5-நிமிட candle ${f2(c.entry.spot)}-ல் close ஆகி trigger ${f2(c.trig)}-ஐ தாண்டியது. ${trendTA} எல்லா stock + option checks-ம் pass ஆனது; entry ${c.entry.t}-க்கு எடுக்கப்பட்டது. ${h.length?h[h.length-1]+' அடைந்தது; SL இப்போது '+f2(c.stop)+'.':'SL spot '+f2(c.stop)+'.'}`}
-    case'CLOSED':return `${c.reason}. Net ${rs(c.pnl&&c.pnl.net)} (costs சேர்த்து).`}}
+    case'CLOSED':return `${c.reason}. Net ${rs(c.pnl&&c.pnl.net)} (costs சேர்த்து).`;
+    case'STALE':return `Server அன்று நடுவில் நின்றுவிட்டது; இந்த call-ன் exit பதிவாகவில்லை. காட்டப்படும் P&L கடைசியாக பார்த்த விலையில்.`}}
   switch(c.status){
     case'WATCHING':return `${trendEN} The trigger is ${f2(c.trig)} (${lvl}, beyond yesterday's ${ce?'high':'low'}). Nothing to do until a 5-minute candle closes beyond it.`;
     case'NEAR':return `${c.sym} is close to its trigger ${f2(c.trig)}. Don't buy early: the rule waits for a 5-minute candle to close beyond it.`;
@@ -182,7 +189,8 @@ function explain(c){const ce=c.side==='CE',f=c.f,fails=(c.checks||[]).filter(x=>
     case'INVALID':return `The stop level ${f2(c.sl)} broke before any entry, so today's setup is cancelled.`;
     case'EXPIRED':return `No confirmed entry before the ${ST.cfg.cut} cut-off. No trade in ${c.sym} today.`;
     case'ACTIVE':{const h=c.hits.map(x=>x.name);return `The ${c.entry.bar} candle closed at ${f2(c.entry.spot)}, beyond the ${f2(c.trig)} trigger. ${trendEN} All ${pass.length} stock and option checks passed, so the entry was taken at ${c.entry.t}. ${h.length?h[h.length-1]+' is done; stop is now '+f2(c.stop)+'.':'Stop is spot '+f2(c.stop)+'.'}`}
-    case'CLOSED':return `${c.reason}. Net ${rs(c.pnl&&c.pnl.net)} after estimated costs and slippage.`}}
+    case'CLOSED':return `${c.reason}. Net ${rs(c.pnl&&c.pnl.net)} after estimated costs and slippage.`;
+    case'STALE':return `The server stopped during this day, so the exit was never recorded. P&L shown is at the last price it saw.`}}
 
 /* ---------------- calls ---------------- */
 const GROUPS={active:['ACTIVE'],near:['NEAR','BREAKOUT'],closed:['CLOSED'],skip:['BLOCKED','INVALID','EXPIRED'],watch:['WATCHING']};
@@ -241,7 +249,46 @@ function renderPerf(){let H=HIST.slice().reverse();if(U.pf==='strong')H=H.filter
   $('#perfstrip').innerHTML=[['Calls',H.length],['Win rate',H.length?(w.length/H.length*100).toFixed(1)+'%':'–'],['Avg win',rs(aw)],['Avg loss',rs(al)],['Expectancy / call',H.length?rs(net/H.length):'–'],['Net',rs(net)],['Max drawdown',rs(-dd)]].map(([a,b])=>`<div><small>${a}</small><b>${b}</b></div>`).join('');
   $$('#perfchips .chip').forEach(b=>b.setAttribute('aria-pressed',b.dataset.p===U.pf));
   $('#histtbl').innerHTML='<thead><tr><th>Date</th><th>Contract</th><th>Entry</th><th class="n">Entry ₹</th><th>Targets hit</th><th>Result</th><th class="n">Net</th><th>Took it</th></tr></thead><tbody>'+H.map(h=>`<tr><td>${h.day}</td><td>${h.strong?'🔥 ':''}${esc(h.contract)}</td><td>${h.entry_time||''}</td><td class="n">${f2(h.entry)}</td><td>${h.hits.join(' ')||'–'}</td><td>${esc(h.result)}</td><td class="n ${h.pnl>=0?'up':'dn'}">${rs(h.pnl)}</td><td><input type="checkbox" data-mine="${h.id}" ${MINE[h.id]?'checked':''} aria-label="I took this"></td></tr>`).join('')+'</tbody>';
-  if(BT)$('#btnote').innerHTML=`The original package claimed ${BT.trades} trades, ${BT.win.toFixed(1)}% wins, profit factor ${BT.pf_net.toFixed(2)} and ${rs(BT.net)} net. Those numbers are <b>not proof</b>: option prices were invented, entries used that day's closing price, and when stop and target fell on the same day the target was counted. Judge the strategy on the forward calls above.`}
+  if(BT)$('#btnote').innerHTML=`The original package claimed ${BT.trades} trades, ${BT.win.toFixed(1)}% wins, profit factor ${BT.pf_net.toFixed(2)} and ${rs(BT.net)} net. Those numbers are <b>not proof</b>: option prices were invented, entries used that day's closing price, and when stop and target fell on the same day the target was counted. Judge the strategy on the forward calls above.`+renderPkg()}
+
+
+/* ---------------- history: any day, live calls or package backtest ---------------- */
+let DAYS=null,DSEL=null;
+const RES={'2':'T2 (+70%)','1':'T1 (+35%)','S':'Stop','E':'End of day'};
+async function renderHist(){if(!DAYS){try{DAYS=await j('/api/days')}catch(e){return}}
+  const all=[...new Set([...DAYS.live,...DAYS.backtest])].sort().reverse();
+  if(!DSEL)DSEL=all.includes(DAYS.today)?DAYS.today:all[0];
+  $('#d-pick').value=DSEL;$('#d-pick').max=DAYS.today;
+  $('#d-prev').disabled=!all.some(d=>d<DSEL);$('#d-next').disabled=!all.some(d=>d>DSEL);
+  let D;try{D=await j('/api/day?d='+DSEL)}catch(e){return}
+  const dt=new Date(DSEL+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short',year:'numeric'});
+  if(D.source==='live'){
+    const calls=D.calls.map(c=>DSEL<DAYS.today&&c.status==='ACTIVE'?Object.assign({},c,{status:'STALE'}):c);
+    const taken=calls.filter(c=>c.entry),done=taken.filter(c=>c.status==='CLOSED'),w=done.filter(c=>c.pnl&&c.pnl.net>0).length,net=taken.reduce((a,c)=>a+(c.pnl?c.pnl.net:0),0);
+    $('#d-src').innerHTML=`<span class="pill ok">Live calls</span> <span class="note">${dt}</span>`;
+    $('#d-strip').innerHTML=[['Calls taken',taken.length],['Won / lost',`${w} / ${done.length-w}`],['Win rate',done.length?(w/done.length*100).toFixed(0)+'%':'–'],['Net (after costs)',`<span class="${net>=0?'up':'dn'}">${rs(net)}</span>`],['Watched, not taken',calls.length-taken.length]].map(([a,b])=>`<div><small>${a}</small><b>${b}</b></div>`).join('');
+    const skip=calls.filter(c=>!c.entry);
+    $('#d-body').innerHTML=(taken.length?`<div class="grid">${taken.sort((a,b)=>a.entry.t.localeCompare(b.entry.t)).map(card).join('')}</div>`:`<div class="empty"><b>No calls taken on this day</b>No setup passed every check. That is the rule working, not a fault.</div>`)+
+      (skip.length?`<div class="panel" style="margin-top:14px"><div class="pad"><h3>Watched but not taken (${skip.length})</h3></div><div class="list" style="border:0">${skip.map(c=>`<div class="row"><div><span class="s ${c.side.toLowerCase()}">${c.sym} ${c.side}</span></div><div><span class="pill ${STAT[c.status][1]}">${STAT[c.status][0]}</span></div><div class="num">trigger ${f2(c.trig)}</div><div class="why">${esc(c.reason)}</div></div>`).join('')}</div></div>`:'')}
+  else if(D.source==='backtest'){
+    const T=D.trades,w=T.filter(t=>t[12]).length,net=T.reduce((a,t)=>a+t[9],0);
+    $('#d-src').innerHTML=`<span class="pill bad">Package backtest · unverified</span> <span class="note">${dt}</span>`;
+    $('#d-strip').innerHTML=[['Trades',T.length],['Won / lost',`${w} / ${T.length-w}`],['Win rate',(w/T.length*100).toFixed(0)+'%'],['Net (after costs)',`<span class="${net>=0?'up':'dn'}">${rs(net)}</span>`]].map(([a,b])=>`<div><small>${a}</small><b>${b}</b></div>`).join('');
+    $('#d-body').innerHTML=`<div class="panel"><div class="pad note">These rows come from the original zip (<code>vacuum_trades_5year.sqlite3</code>). They have no entry or exit times, used simulated option prices and the old +35% / +70% / −10% rules, so they are not the same as live KRT calls.</div><div class="scroll"><table class="t"><thead><tr><th>Contract</th><th class="n">Entry ₹</th><th class="n">Exit ₹</th><th>Result</th><th class="n">Lot</th><th class="n">Net</th><th></th></tr></thead><tbody>${T.map(t=>`<tr><td class="${t[2]==='CE'?'up':'dn'}"><b>${t[1]} ${t[3]} ${t[2]}</b></td><td class="n">${f2(t[4])}</td><td class="n">${f2(t[5])}</td><td>${RES[t[6]]}</td><td class="n">${t[10]}</td><td class="n ${t[9]>=0?'up':'dn'}">${rs(t[9])}</td><td><span class="res ${t[12]?'w':'l'}">${t[12]?'WIN':'LOSS'}</span></td></tr>`).join('')}</tbody></table></div></div>`}
+  else{$('#d-src').innerHTML=`<span class="pill mute">No data</span> <span class="note">${dt}</span>`;$('#d-strip').innerHTML='';
+    $('#d-body').innerHTML=`<div class="empty"><b>Nothing recorded for this day</b>${DSEL>'2026-09-16'?'The zip history ends on 16 Sep 2026, and the live server was not running (or had no disk) on this day.':'Weekend, holiday, or no trades in the package on this day.'}</div>`}}
+function stepDay(dir){const all=[...new Set([...DAYS.live,...DAYS.backtest])].sort();const i=dir<0?all.filter(d=>d<DSEL).pop():all.find(d=>d>DSEL);if(i){DSEL=i;renderHist()}}
+$('#d-prev').onclick=()=>stepDay(-1);$('#d-next').onclick=()=>stepDay(1);
+$('#d-pick').onchange=e=>{DSEL=e.target.value;renderHist()};
+$('#d-today').onclick=()=>{DSEL=DAYS.today;renderHist()};
+$('#d-yest').onclick=()=>{const all=[...new Set([...DAYS.live,...DAYS.backtest])].sort();DSEL=all.filter(d=>d<DAYS.today).pop()||DAYS.today;renderHist()};
+
+/* ---------------- package history summary on Performance ---------------- */
+function renderPkg(){if(!BT||!BT.rows)return'';const T=BT.rows,g=k=>{const m={};for(const t of T){const x=k(t);(m[x]=m[x]||[]).push(t)}return m};
+  const tbl=(m,lab)=>`<table class="t"><thead><tr><th>${lab}</th><th class="n">Trades</th><th class="n">Won</th><th class="n">Lost</th><th class="n">Win %</th><th class="n">T2</th><th class="n">T1</th><th class="n">Stop</th><th class="n">EOD</th><th class="n">Net</th></tr></thead><tbody>${Object.keys(m).sort().reverse().map(k=>{const a=m[k],w=a.filter(t=>t[12]).length,c=r=>a.filter(t=>t[6]===r).length,n=a.reduce((s,t)=>s+t[9],0);return `<tr><td>${k}</td><td class="n">${a.length}</td><td class="n up">${w}</td><td class="n dn">${a.length-w}</td><td class="n">${(w/a.length*100).toFixed(1)}</td><td class="n">${c('2')}</td><td class="n">${c('1')}</td><td class="n">${c('S')}</td><td class="n">${c('E')}</td><td class="n ${n>=0?'up':'dn'}">${rs(n)}</td></tr>`}).join('')}</tbody></table>`;
+  const days=Object.entries(g(t=>t[0])).sort((a,b)=>a[0].localeCompare(b[0])).slice(-60),mx=Math.max(...days.map(([d,a])=>Math.abs(a.reduce((s,t)=>s+t[9],0))));
+  return `<p class="note">Last 60 sessions in the zip, net per day (tap a day in History to see its trades):</p><div class="bars">${days.map(([d,a])=>{const n=a.reduce((s,t)=>s+t[9],0);return `<i data-day="${d}" title="${d}: ${rs(n)}" style="cursor:pointer;height:${Math.max(3,Math.abs(n)/mx*100)}%;background:${n>=0?'var(--ok)':'var(--pe)'}"></i>`}).join('')}</div>
+   <h3 style="margin-top:16px">By year</h3><div class="scroll">${tbl(g(t=>t[0].slice(0,4)),'Year')}</div><h3 style="margin-top:16px">By month</h3><div class="scroll" style="max-height:340px">${tbl(g(t=>t[0].slice(0,7)),'Month')}</div>`}
 
 /* ---------------- levels / rules ---------------- */
 function renderLevels(){const q=($('#lvq').value||'').toUpperCase(),R=LV.filter(r=>!q||r.sym.includes(q)).sort((a,b)=>(b.score||0)-(a.score||0));
@@ -262,10 +309,11 @@ function callText(c){const e=c.entry,L=c.levels,k=c.contract;return `${c.strong?
 
 /* ---------------- nav & events ---------------- */
 function go(t){$$('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));$$('main>section').forEach(s=>s.hidden=s.id!==t);
-  if(!ST)return;({calls:render,near:renderNear,jack:renderJack,perf:renderPerf,levels:renderLevels,rules:renderRules})[t]()}
+  if(!ST)return;({calls:render,hist:renderHist,near:renderNear,jack:renderJack,perf:renderPerf,levels:renderLevels,rules:renderRules})[t]()}
 document.addEventListener('click',e=>{const t=e.target.closest('nav.tabs button');if(t)return go(t.dataset.t);
   const f=e.target.closest('[data-f]');if(f){U.filter=f.dataset.f;saveU();if($('#calls').hidden)go('calls');return render()}
   const p=e.target.closest('[data-p]');if(p){U.pf=p.dataset.p;saveU();return renderPerf()}
+  const dd=e.target.closest('[data-day]');if(dd){DSEL=dd.dataset.day;return go('hist')}
   const cp=e.target.closest('[data-copy]');if(cp){const c=ST.calls.find(x=>x.id===cp.dataset.copy);navigator.clipboard?.writeText(callText(c)).then(()=>toast('Call copied'),()=>toast('Copy blocked by the browser'));return}});
 document.addEventListener('change',e=>{const m=e.target.closest('[data-mine]');if(m){MINE[m.dataset.mine]=m.checked;if(!m.checked)delete MINE[m.dataset.mine];store.set('krt_mine',MINE);if(!$('#perf').hidden)renderPerf()}});
 $('#lang').onclick=()=>{U.lang=U.lang==='en'?'ta':'en';saveU();$('#lang').setAttribute('aria-pressed',TA());$('#lang').textContent=TA()?'English':'தமிழ்';render()};
