@@ -34,7 +34,7 @@ class Engine:
         self.t_entry, self.t_cut, self.t_sq = hm(cfg.get("ENTRY_START", "09:25")), hm(cfg.get("NO_NEW_ENTRY", "14:30")), hm(cfg.get("SQUARE_OFF", "15:15"))
         self.lock = threading.RLock(); self.day = None; self.calls = {}; self.bars = {}; self.q = {}; self.optq = {}
         self.feed = dict(status="starting", last_poll=None, exch_age=None, error="", broker=getattr(broker, "name", ""))
-        self._dirty = 0.0; self.source = cfg.get("_SOURCE", "live"); self._plan_at = 0.0
+        self._dirty = 0.0; self.source = cfg.get("_SOURCE", "live"); self._plan_at = 0.0; self.autosave = self.source == "live"
 
 
     # ------------------------------------------------------------------ planned contract for every watchlist stock (before entry)
@@ -102,7 +102,7 @@ class Engine:
         self.save(force=True)
 
     def save(self, force=False):
-        if not force and time.time() - self._dirty > 2: return
+        if not force and (not self.autosave or time.time() - self._dirty > 2): return
         with self.lock:
             (self.dir / f"calls_{self.day}.json").write_text(json.dumps({"calls": self.calls}, default=str))
 
@@ -120,13 +120,16 @@ class Engine:
     def tick(self, now, q):
         with self.lock:
             if self.day != now.date(): self.new_day(now)
+            toks = [c["contract"]["token"] for c in self.calls.values() if c["status"] == "ACTIVE"]
+        oq = {}
+        if toks:                                   # network call outside the lock so the website never waits on it
+            try: oq = self.broker.option_quotes(toks)
+            except Exception as e: print("option quote error:", e, flush=True)
+        with self.lock:
+            self.optq.update(oq)
             self.q = q; self.feed.update(status="ok", last_poll=now.isoformat(), error="")
             ts = [v["ts"] for v in q.values() if v.get("ts")]
             self.feed["exch_age"] = round((now - max(ts)).total_seconds()) if ts else None
-            active = [c for c in self.calls.values() if c["status"] == "ACTIVE"]
-            if active:
-                try: self.optq.update(self.broker.option_quotes([c["contract"]["token"] for c in active]))
-                except Exception as e: print("option quote error:", e, flush=True)
             for c in list(self.calls.values()):
                 sq = q.get(c["sym"])
                 if sq: self.track(c, sq, now)
