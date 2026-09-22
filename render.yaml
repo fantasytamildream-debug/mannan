@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: liquidity-vacuum-terminal
+    runtime: python
+    region: singapore
+    plan: starter            # free plan sleeps after 15 min idle and stops the live feed
+    buildCommand: pip install -r requirements.txt
+    startCommand: python live_bridge.py
+    healthCheckPath: /ping
+    envVars:
+      - key: APP_PASSWORD
+        sync: false
+      - key: BROKER
+        value: angel
+      - key: ANGEL_API_KEY
+        sync: false
+      - key: ANGEL_CLIENT_CODE
+        sync: false
+      - key: ANGEL_MPIN
+        sync: false
+      - key: ANGEL_TOTP_SECRET
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: SERVER_ALERTS
+        value: "1"
+      - key: MIN_SCORE
+        value: "60"
+      - key: TOP_PER_SIDE
+        value: "10"
+      - key: QUOTE_INTERVAL_SECONDS
+        value: "5"
