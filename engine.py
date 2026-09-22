@@ -298,5 +298,15 @@ class Engine:
                                  vol_pace=self.vol_pace, min_opt_lots=self.min_opt_lots, delta=self.tdelta),
                         calls=list(self.calls.values()))
 
+    def days(self):
+        """Dates that have a saved live call file (newest first)."""
+        return sorted((p.stem[6:] for p in self.dir.glob("calls_*.json")), reverse=True)
+
+    def day_calls(self, d):
+        if d == str(self.day):
+            with self.lock: return list(self.calls.values())
+        f = self.dir / f"calls_{d}.json"
+        return list(json.loads(f.read_text())["calls"].values()) if f.exists() else None
+
     def history(self):
         f = self.dir / "history.json"; return json.loads(f.read_text()) if f.exists() else []
