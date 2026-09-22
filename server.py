@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 import strategy as S, brokers as B
 from engine import Engine
+import replay as RP
 
 ROOT = Path(__file__).resolve().parent
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -21,7 +22,7 @@ KEYS = ("BROKER", "ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_MPIN", "ANGEL_TOT
         "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_TOPIC_THREAD_ID", "APP_PASSWORD", "PORT", "DATA_DIR", "DEMO", "DEMO_VOL",
         "QUOTE_INTERVAL_SECONDS", "RISK_PER_TRADE", "MAX_LOTS", "MIN_SCORE", "TOP_PER_SIDE", "TARGET_DELTA", "MAX_SPREAD_PCT",
         "MIN_OPTION_VOLUME_LOTS", "VOLUME_PACE", "MIN_DTE", "INDEX_FILTER", "MAX_ACTIVE", "BAR_SECONDS", "IGNORE_MARKET_HOURS",
-        "ENTRY_START", "NO_NEW_ENTRY", "SQUARE_OFF")
+        "ENTRY_START", "NO_NEW_ENTRY", "SQUARE_OFF", "REPLAY")
 
 def load_cfg():
     cfg = {"PORT": "8765", "QUOTE_INTERVAL_SECONDS": "5"}
@@ -111,7 +112,7 @@ def make_handler(cfg, eng, statics):
             if u.path == "/api/levels": return self.send(200, statics["levels"])
             if u.path == "/api/backtest": return self.send(200, statics["backtest"])
             if u.path == "/api/days":
-                return self.send(200, {"live": eng.days(), "backtest": statics["bt_days"], "today": now.date().isoformat()})
+                return self.send(200, {"live": eng.days(), "backtest": statics["bt_days"], "today": now.date().isoformat(), "replay": statics.get("replay")})
             if u.path == "/api/day":
                 d = (parse_qs(u.query).get("d") or [""])[0][:10]
                 calls = eng.day_calls(d)
@@ -144,10 +145,12 @@ def main():
             p = c.get("pnl") or {}; tg.send(f"{c['id']}|{kind}|{e['t']}" if kind == "exit" else f"{c['id']}|{kind}",
                     f"{'✅' if kind.startswith('t') else '⛔' if kind in ('sl',) else '🔚'} {c['contract']['name']}\n{e['text']} at {e['t']} IST\nNet so far ≈ ₹{p.get('net', 0):,.0f}")
     eng = Engine(cfg, broker, candles, {s: data["lots"][s] for s in symbols}, cache, notify)
-    last_lots = {}
-    for s in symbols:
-        try: last_lots[s] = data["lots"][s]
-        except KeyError: pass
+    last_lots = {s: data["lots"][s] for s in symbols if s in data["lots"]}
+    if hasattr(broker, "lot_of"):                       # real lot sizes from the broker's contract list
+        for s in symbols:
+            l = broker.lot_of(s)
+            if l: last_lots[s] = l
+    eng.lots = last_lots
     T = data["trades"]; nw = sum(t[9] for t in T if t[9] > 0); nl = -sum(t[9] for t in T if t[9] < 0)
     bt_by_day = {}
     for t in T: bt_by_day.setdefault(t[0], []).append(t)
@@ -173,6 +176,28 @@ def main():
             busy = eng.market_open(now)
             time.sleep(max(0.5, interval - (time.time() - t0)) if busy else 30)
     threading.Thread(target=loop, daemon=True).start()
+    def plans():
+        while True:
+            now = datetime.now(IST)
+            try:
+                if eng.day: eng.refresh_plans(now)
+            except Exception as e: log("plan refresh error:", e)
+            time.sleep(30 if eng.market_open(now) else 900)
+    threading.Thread(target=plans, daemon=True).start()
+    statics["replay"] = "not started"
+    def replays():
+        if not hasattr(broker, "history") or cfg.get("REPLAY", "1") != "1":
+            statics["replay"] = "not available for this broker"; return
+        time.sleep(5); now = datetime.now(IST)
+        first = datetime.strptime(max(statics["bt_days"]), "%Y-%m-%d").date() + timedelta(days=1)
+        last = now.date() - timedelta(days=1); first = max(first, last - timedelta(days=45))
+        todo = RP.missing_days(first, last, cache)
+        for i, d in enumerate(todo):
+            statics["replay"] = f"replaying {d} ({i + 1}/{len(todo)})"; log("Replay", d, "...")
+            try: log("Replay", d, "→", RP.replay_day(cfg, broker, candles, last_lots, cache, d, log))
+            except Exception as e: log("Replay", d, "failed:", e)
+        statics["replay"] = f"done ({len(todo)} day{'s' if len(todo) != 1 else ''})"
+    threading.Thread(target=replays, daemon=True).start()
     def eod_refresh():
         while True:
             time.sleep(3600)
