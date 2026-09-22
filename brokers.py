@@ -121,6 +121,20 @@ class AngelOne:
 
     def contracts(self, sym): return self.opt.get(sym, [])
 
+    def lot_of(self, sym):
+        o = self.opt.get(sym) or []
+        return o[0]["lot"] if o and o[0].get("lot") else None
+
+    def history(self, exch, token, day, interval="FIVE_MINUTE"):
+        """Intraday candles for one past day: [[datetime, o, h, l, c, v], ...]"""
+        d = self._post("/rest/secure/angelbroking/historical/v1/getCandleData",
+                       {"exchange": exch, "symboltoken": str(token), "interval": interval, "fromdate": f"{day} 09:15", "todate": f"{day} 15:30"})
+        out = []
+        for r in (d if isinstance(d, list) else []):
+            try: out.append([datetime.fromisoformat(r[0]).astimezone(IST), float(r[1]), float(r[2]), float(r[3]), float(r[4]), float(r[5])])
+            except Exception: pass
+        return out
+
     def option_quotes(self, tokens):
         out = {}
         for v in self._quote("NFO", list(tokens)):
