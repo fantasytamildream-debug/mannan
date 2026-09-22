@@ -6,7 +6,7 @@ that had already closed at each moment are used, so nothing from later in the da
 What history cannot give: bid/ask spread (a 0.4% spread is assumed) and tick-by-tick order
 inside a candle (open → low → high → close for green candles, open → high → low → close for red).
 """
-import json, math
+import json, math, time
 from datetime import datetime, timedelta, date
 from pathlib import Path
 import strategy as S
@@ -79,6 +79,7 @@ def replay_day(cfg, real, candles, lots, data_dir, day, log=print):
             if r[0] not in st["bars"]: st["bars"].add(r[0]); st["vol"] += r[5]
         q = {s: dict(ltp=st["ltp"], open=st["open"], high=st["high"], low=st["low"], prev_close=prev.get(s) or st["open"], volume=st["vol"], ts=t) for s, st in state.items()}
         rb.now = t; eng.tick(t, q)
+        time.sleep(0.002)                          # let the website threads run
     with eng.lock:
         for c in eng.calls.values():
             c["src"] = "replay"
