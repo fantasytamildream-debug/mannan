@@ -34,7 +34,43 @@ class Engine:
         self.t_entry, self.t_cut, self.t_sq = hm(cfg.get("ENTRY_START", "09:25")), hm(cfg.get("NO_NEW_ENTRY", "14:30")), hm(cfg.get("SQUARE_OFF", "15:15"))
         self.lock = threading.RLock(); self.day = None; self.calls = {}; self.bars = {}; self.q = {}; self.optq = {}
         self.feed = dict(status="starting", last_poll=None, exch_age=None, error="", broker=getattr(broker, "name", ""))
-        self._dirty = 0.0
+        self._dirty = 0.0; self.source = cfg.get("_SOURCE", "live"); self._plan_at = 0.0
+
+
+    # ------------------------------------------------------------------ planned contract for every watchlist stock (before entry)
+    def plan_contract(self, c, now):
+        """Strike we expect to buy if the trigger confirms. The final pick at entry can differ if this one is illiquid."""
+        cons = [x for x in self.broker.contracts(c["sym"]) if x["type"] == c["side"]]
+        if not cons: return None
+        dd = lambda x: x["expiry"] if isinstance(x["expiry"], date) else date.fromisoformat(str(x["expiry"]))
+        exps = sorted({dd(x) for x in cons}); exps = [e for e in exps if (e - now.date()).days >= self.min_dte] or exps
+        ex = exps[0]; pool = [x for x in cons if dd(x) == ex]; T = S.years_to(ex, now); iv = max(.15, c["f"]["hv"] * 1.2)
+        best = min(pool, key=lambda x: abs(abs(S.bs(c["trig"], x["strike"], T, .065, iv, c["side"])[1]) - self.tdelta))
+        tg, R = S.targets(c["trig"], c["sl"], c["side"]); Tl = max(T - 2 / (365 * 24), 1e-4)
+        pr = lambda sp: round(S.bs(sp, best["strike"], Tl, .065, iv, c["side"])[0], 2)
+        lot = best.get("lot") or c["lot"]; e = round(S.bs(c["trig"], best["strike"], T, .065, iv, c["side"])[0], 2); sl = pr(c["sl"])
+        return dict(name=f"{c['sym']} {best['strike']:g} {c['side']} {ex:%d %b}", token=best["token"], strike=best["strike"], expiry=ex.isoformat(), lot=lot,
+                    iv=iv, est_entry=e, est_sl=sl, est_t=[pr(t) for t in tg], spot_t=tg, risk_lot=(e - sl) * lot + S.friction(e * lot, sl * lot),
+                    ltp=None, bid=None, ask=None, at=None)
+
+    def refresh_plans(self, now):
+        """Runs outside the quote loop: pick planned strikes once, then refresh their live option prices."""
+        with self.lock: todo = [c for c in self.calls.values() if c["status"] in PRE]
+        for c in todo:
+            if not c.get("plan"):
+                try: p = self.plan_contract(c, now)
+                except Exception as e: print("plan error", c["sym"], e, flush=True); p = None
+                if p:
+                    with self.lock: c["plan"] = p
+        toks = [c["plan"]["token"] for c in todo if c.get("plan")]
+        if not toks: return
+        try: oq = self.broker.option_quotes(toks)
+        except Exception as e: print("plan quote error:", e, flush=True); return
+        with self.lock:
+            for c in todo:
+                p = c.get("plan"); v = oq.get(p["token"]) if p else None
+                if v: p.update(ltp=v.get("ltp"), bid=v.get("bid"), ask=v.get("ask"), at=now.strftime("%H:%M:%S"))
+            self._dirty = time.time()
 
     # ------------------------------------------------------------------ helpers
     def mins(self, now): return 10 * 60 if self.ignore_hours else now.hour * 60 + now.minute
@@ -58,7 +94,7 @@ class Engine:
             cid = f"{today:%y%m%d}-{w['sym']}-{w['side']}"
             self.calls[cid] = dict(id=cid, day=today.isoformat(), sym=w["sym"], side=w["side"], score=w["score"], parts=w["parts"],
                                    trig=w["trig"], sl=w["sl"], planR=w["planR"], lot=w["lot"], f={k: w["f"][k] for k in ("vah", "val", "aw", "atr", "cl", "pdh", "pdl", "h3", "l3", "hv", "vavg", "comp", "date")},
-                                   status="WATCHING", reason="Waiting for the market", checks=[], events=[], strong=False, contract=None, fills=[],
+                                   src=self.source, plan=None, status="WATCHING", reason="Waiting for the market", checks=[], events=[], strong=False, contract=None, fills=[],
                                    entry=None, levels=None, stop=None, lots=0, open_lots=0, hits=[], spot=None, opt=None, pnl=None, spark=[], ospark=[])
         print(f"Engine: {today} watchlist {len(self.calls)} ({sum(c['side']=='CE' for c in self.calls.values())} CE / {sum(c['side']=='PE' for c in self.calls.values())} PE) from {max(b[0] for c in hist.values() for b in c[-1:])} close", flush=True)
         if hasattr(self.broker, "set_bias"):
@@ -76,7 +112,7 @@ class Engine:
 
     def summary(self, c):
         e = c["entry"] or {}
-        return dict(id=c["id"], day=c["day"], sym=c["sym"], side=c["side"], contract=(c["contract"] or {}).get("name"), score=c["score"], strong=c["strong"],
+        return dict(id=c["id"], day=c["day"], sym=c["sym"], side=c["side"], src=c.get("src", "live"), contract=(c["contract"] or {}).get("name"), score=c["score"], strong=c["strong"],
                     entry_time=e.get("t"), entry=e.get("prem"), exit_time=c["events"][-1]["t"] if c["events"] else None, result=c["reason"],
                     hits=[h["name"] for h in c["hits"]], pnl=round(c["pnl"]["net"], 2) if c.get("pnl") else 0, lots=c["lots"], lot=c["lot"])
 
