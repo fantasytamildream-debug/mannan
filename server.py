@@ -86,7 +86,9 @@ def call_text(c):
             f"Risk ≈ ₹{e['risk_lot'] * c['lots']:,.0f} incl. costs · score {c['score']:.0f}/100 (quality, not win chance)\nNot investment advice.")
 
 # ------------------------------------------------------------------ HTTP
-def make_handler(cfg, eng, statics):
+BOOT = {"status": "starting", "eng": None, "statics": {}}
+
+def make_handler(cfg, _eng=None, _statics=None):
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a): pass
         def send(self, code, obj, ctype="application/json"):
@@ -104,9 +106,12 @@ def make_handler(cfg, eng, statics):
             return ok
         def do_GET(self):
             if not self.authed(): return
-            u = urlparse(self.path); now = datetime.now(IST)
-            if u.path == "/ping": return self.send(200, {"ok": True})
+            u = urlparse(self.path); now = datetime.now(IST); eng, statics = BOOT["eng"], BOOT["statics"]
+            if u.path == "/ping": return self.send(200, {"ok": True, "status": BOOT["status"]})
             if u.path in ("/", "/index.html"): return self.send(200, (ROOT / "static" / "index.html").read_bytes(), "text/html; charset=utf-8")
+            if eng is None:
+                if u.path == "/api/state": return self.send(200, {"starting": True, "status": BOOT["status"], "now": now.isoformat()})
+                return self.send(503, {"error": "starting", "status": BOOT["status"]})
             if u.path == "/api/state": return self.send(200, eng.snapshot(now))
             if u.path == "/api/history": return self.send(200, eng.history())
             if u.path == "/api/levels": return self.send(200, statics["levels"])
@@ -127,17 +132,28 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--demo", action="store_true"); ap.add_argument("--no-eod", action="store_true"); ap.add_argument("--host")
     a = ap.parse_args(); cfg = load_cfg()
     if a.demo: cfg["DEMO"] = "1"
+    port = int(os.environ.get("PORT") or cfg["PORT"]); host = a.host or ("0.0.0.0" if os.environ.get("RENDER") or os.environ.get("PORT") else "127.0.0.1")
+    if host != "127.0.0.1" and not cfg.get("APP_PASSWORD"): log("WARNING: public address without APP_PASSWORD")
+    srv = ThreadingHTTPServer((host, port), make_handler(cfg)); srv.daemon_threads = True
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    log(f"KRT Options Terminal at http://localhost:{port} (starting up)")
+    BOOT["status"] = "loading market data"
     data = json.loads((ROOT / "data" / "market_data.json").read_text()); symbols = set(data["lots"]) - set(data["indices"])
     cache = Path(cfg.get("DATA_DIR") or (ROOT / "cache")); cache.mkdir(parents=True, exist_ok=True)
     candles = {s: list(data["candles"][s]) for s in symbols}
     def merge(rows):
         for s, rs in rows.items():
             have = {r[0] for r in candles.get(s, [])}; candles.setdefault(s, []).extend(r for r in rs if r[0] not in have); candles[s].sort(key=lambda r: r[0])
-    if not a.no_eod: log(f"Checking NSE bhavcopy after {data['asOf']}..."); merge(fetch_eod(data["asOf"], symbols, cache))
+    if not a.no_eod: BOOT["status"] = "downloading NSE end-of-day files"; log(f"Checking NSE bhavcopy after {data['asOf']}..."); merge(fetch_eod(data["asOf"], symbols, cache))
+    BOOT["status"] = "logging in to broker and loading contract list"
     try:
         broker = B.make_broker(cfg, symbols, cache, candles); log(f"{broker.name} connected. {broker.connect()}")
-    except B.BrokerError as e: sys.exit(str(e))
-    except urllib.error.HTTPError as e: sys.exit(f"Broker login failed: HTTP {e.code} {e.read()[:300]!r}")
+    except B.BrokerError as e:
+        BOOT["status"] = f"broker login failed: {e}"; log(BOOT["status"])
+        while True: time.sleep(3600)            # keep the site up so the error is visible
+    except urllib.error.HTTPError as e:
+        BOOT["status"] = f"broker login failed: HTTP {e.code}"; log(BOOT["status"], e.read()[:300])
+        while True: time.sleep(3600)
     tg = Telegram(cfg)
     def notify(c, kind, e):
         if kind == "entry": tg.send(f"{c['id']}|entry", call_text(c))
@@ -160,6 +176,7 @@ def main():
                                 note="Package backtest, NOT verified: synthetic option prices, same-day close used for entry, targets checked before stops.",
                                 rows=T)}
     statics.update(statics_extra)
+    BOOT["statics"] = statics; BOOT["eng"] = eng; BOOT["status"] = "ready"; log("Ready.")
     interval = float(cfg["QUOTE_INTERVAL_SECONDS"])
     def loop():
         while True:
@@ -188,7 +205,7 @@ def main():
     def replays():
         if not hasattr(broker, "history") or cfg.get("REPLAY", "1") != "1":
             statics["replay"] = "not available for this broker"; return
-        time.sleep(5); now = datetime.now(IST)
+        time.sleep(20); now = datetime.now(IST)
         first = datetime.strptime(max(statics["bt_days"]), "%Y-%m-%d").date() + timedelta(days=1)
         last = now.date() - timedelta(days=1); first = max(first, last - timedelta(days=45))
         todo = RP.missing_days(first, last, cache)
@@ -196,6 +213,7 @@ def main():
             statics["replay"] = f"replaying {d} ({i + 1}/{len(todo)})"; log("Replay", d, "...")
             try: log("Replay", d, "→", RP.replay_day(cfg, broker, candles, last_lots, cache, d, log))
             except Exception as e: log("Replay", d, "failed:", e)
+            time.sleep(3)
         statics["replay"] = f"done ({len(todo)} day{'s' if len(todo) != 1 else ''})"
     threading.Thread(target=replays, daemon=True).start()
     def eod_refresh():
@@ -204,9 +222,8 @@ def main():
             if not a.no_eod and datetime.now(IST).hour >= 19:
                 merge(fetch_eod(data["asOf"], symbols, cache)); statics["levels"] = S.level_table(candles, last_lots)
     threading.Thread(target=eod_refresh, daemon=True).start()
-    port = int(os.environ.get("PORT") or cfg["PORT"]); host = a.host or ("0.0.0.0" if os.environ.get("RENDER") or os.environ.get("PORT") else "127.0.0.1")
-    if host != "127.0.0.1" and not cfg.get("APP_PASSWORD"): log("WARNING: public address without APP_PASSWORD")
-    log(f"KRT Options Terminal at http://localhost:{port}")
-    ThreadingHTTPServer((host, port), make_handler(cfg, eng, statics)).serve_forever()
+    try:
+        while True: time.sleep(3600)
+    except KeyboardInterrupt: log("Stopped.")
 
 if __name__ == "__main__": main()
