@@ -110,6 +110,15 @@ def make_handler(cfg, eng, statics):
             if u.path == "/api/history": return self.send(200, eng.history())
             if u.path == "/api/levels": return self.send(200, statics["levels"])
             if u.path == "/api/backtest": return self.send(200, statics["backtest"])
+            if u.path == "/api/days":
+                return self.send(200, {"live": eng.days(), "backtest": statics["bt_days"], "today": now.date().isoformat()})
+            if u.path == "/api/day":
+                d = (parse_qs(u.query).get("d") or [""])[0][:10]
+                calls = eng.day_calls(d)
+                if calls is not None: return self.send(200, {"date": d, "source": "live", "calls": calls})
+                rows = statics["bt_by_day"].get(d)
+                if rows: return self.send(200, {"date": d, "source": "backtest", "trades": rows})
+                return self.send(200, {"date": d, "source": "none"})
             self.send(404, {"error": "not found"})
     return H
 
@@ -140,9 +149,14 @@ def main():
         try: last_lots[s] = data["lots"][s]
         except KeyError: pass
     T = data["trades"]; nw = sum(t[9] for t in T if t[9] > 0); nl = -sum(t[9] for t in T if t[9] < 0)
+    bt_by_day = {}
+    for t in T: bt_by_day.setdefault(t[0], []).append(t)
+    statics_extra = {"bt_by_day": bt_by_day, "bt_days": sorted(bt_by_day, reverse=True)}
     statics = {"levels": S.level_table(candles, last_lots),
                "backtest": dict(trades=len(T), win=sum(t[12] for t in T) / len(T) * 100, pf_net=nw / nl, net=sum(t[9] for t in T),
-                                note="Package backtest, NOT verified: synthetic option prices, same-day close used for entry, targets checked before stops.")}
+                                note="Package backtest, NOT verified: synthetic option prices, same-day close used for entry, targets checked before stops.",
+                                rows=T)}
+    statics.update(statics_extra)
     interval = float(cfg["QUOTE_INTERVAL_SECONDS"])
     def loop():
         while True:
