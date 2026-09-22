@@ -1,0 +1,276 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KRT Options Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Sans+Tamil:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0F1B25;--panel:#152533;--panel2:#1B2D3C;--line:#2A3E50;--ink:#E3EAF0;--mute:#93A6B5;--amber:#F2B544;--ce:#4FC1D1;--pe:#F2786A;--ok:#5CCB8A;
+--fs:"IBM Plex Sans","Noto Sans Tamil",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--fc:"IBM Plex Sans Condensed","Noto Sans Tamil","Arial Narrow",system-ui,sans-serif;color-scheme:dark}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#EEF2F4;--panel:#FFFFFF;--panel2:#F4F7F9;--line:#D3DCE2;--ink:#12202B;--mute:#566B7A;--amber:#A96A0C;--ce:#127C8C;--pe:#BF4236;--ok:#1E8A4F;color-scheme:light}}
+:root[data-theme="light"]{--bg:#EEF2F4;--panel:#FFFFFF;--panel2:#F4F7F9;--line:#D3DCE2;--ink:#12202B;--mute:#566B7A;--amber:#A96A0C;--ce:#127C8C;--pe:#BF4236;--ok:#1E8A4F;color-scheme:light}
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*,*:before,*:after{box-sizing:inherit}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--fs);font-variant-numeric:tabular-nums}
+button,input,select{font:inherit;color:inherit}:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--panel);border-bottom:1px solid var(--line)}
+.bar1{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;padding:10px 16px 6px}
+.brand{font:700 19px/1 var(--fc);letter-spacing:.02em}.brand b{color:var(--amber)}
+.feed{font:600 13px var(--fc);padding:3px 9px;border-radius:3px;border:1px solid currentColor;display:inline-flex;gap:6px;align-items:center}
+.feed:before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
+.feed.live{color:var(--ok)}.feed.delayed{color:var(--amber)}.feed.disconnected{color:var(--pe)}
+.meta{display:flex;flex-wrap:wrap;gap:4px 16px;color:var(--mute);font-size:13.5px;align-items:center}
+.meta b{color:var(--ink);font-weight:600}
+.tools{margin-left:auto;display:flex;gap:6px}
+.ib{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padding:5px 10px;cursor:pointer;font:600 13px var(--fc)}
+.ib[aria-pressed="true"]{border-color:var(--amber);color:var(--amber)}
+nav.tabs{display:flex;gap:2px;padding:0 10px;overflow-x:auto}
+nav.tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:9px 12px;font:600 15px var(--fc);color:var(--mute);cursor:pointer;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-color:var(--amber)}
+nav.tabs .n{font-size:12px;color:var(--mute);margin-left:4px}
+main{padding:14px 16px 60px;max-width:1500px;margin:0 auto}
+.warnbar{margin:10px 16px 0;padding:10px 14px;border-left:4px solid var(--pe);background:var(--panel);font-size:14px}
+.warnbar.am{border-color:var(--amber)}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--panel);border:1px solid var(--line);border-radius:4px;overflow:hidden;margin-bottom:14px}
+.strip div{background:var(--panel);padding:10px 14px;box-shadow:0 0 0 1px var(--line)}.strip small{display:block;color:var(--mute);font:600 12.5px var(--fc)}.strip b{font:700 22px var(--fc)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.chip{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:6px 14px;cursor:pointer;font:600 14px var(--fc);color:var(--mute)}
+.chip[aria-pressed="true"]{color:var(--ink);border-color:var(--amber);background:var(--panel2)}
+.chip i{font-style:normal;margin-left:6px;color:var(--amber)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,560px),1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--c);border-radius:5px;display:flex;flex-direction:column}
+.card.ce{--c:var(--ce)}.card.pe{--c:var(--pe)}
+.ch{display:flex;gap:10px;align-items:flex-start;padding:14px 16px 8px;flex-wrap:wrap}
+.ch h2{margin:0;font:700 24px/1.15 var(--fc);color:var(--c)}
+.ch .sub{color:var(--mute);font-size:13.5px}
+.pill{display:inline-block;font:700 12.5px/1 var(--fc);padding:5px 9px;border-radius:3px;border:1px solid currentColor;white-space:nowrap}
+.pill.solid{background:var(--c);color:var(--panel);border-color:var(--c)}
+.pill.ok{color:var(--ok)}.pill.bad{color:var(--pe)}.pill.am{color:var(--amber)}.pill.mute{color:var(--mute)}
+.ch .right{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.big{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.big div{padding:10px 16px;border-right:1px solid var(--line)}.big div:last-child{border:0}
+.big small{display:block;color:var(--mute);font:600 12.5px var(--fc)}.big b{font:700 26px/1.2 var(--fc)}.big em{font-style:normal;font-size:13px;color:var(--mute)}
+.src{font:700 10.5px/1 var(--fc);padding:2px 4px;border-radius:2px;margin-left:5px;vertical-align:middle;letter-spacing:.04em}
+.src.live{background:var(--ok);color:var(--panel)}.src.est{border:1px dashed var(--amber);color:var(--amber)}
+.up{color:var(--ok)}.dn{color:var(--pe)}
+.ladder{display:grid;grid-template-columns:repeat(5,1fr);gap:0;padding:12px 10px 4px}
+.lv{text-align:center;padding:6px 4px;position:relative}
+.lv:before{content:"";position:absolute;top:22px;left:0;right:0;height:3px;background:var(--line);z-index:0}
+.lv:first-child:before{left:50%}.lv:last-child:before{right:50%}
+.lv .dot{position:relative;z-index:1;width:16px;height:16px;border-radius:50%;margin:0 auto 6px;border:3px solid var(--line);background:var(--panel)}
+.lv.sl .dot{border-color:var(--pe)}.lv.en .dot{border-color:var(--ink)}.lv.t .dot{border-color:var(--ok)}
+.lv.hit .dot{background:var(--ok);border-color:var(--ok)}.lv.hitsl .dot{background:var(--pe);border-color:var(--pe)}.lv.cur .dot{box-shadow:0 0 0 4px color-mix(in srgb,var(--amber) 45%,transparent)}
+.lv .src{display:inline-block;vertical-align:1px}.big em{display:block}.big .src{vertical-align:4px}.lv small{display:block;font:700 13px var(--fc);color:var(--mute)}.lv b{display:block;font:700 18px var(--fc)}.lv span{display:block;font-size:12px;color:var(--mute)}
+.lv .when{color:var(--ok);font:600 12.5px var(--fc)}.lv.hitsl .when{color:var(--pe)}
+.rule{padding:4px 16px 10px;font-size:13.5px;color:var(--mute)}.rule b{color:var(--ink)}
+details.more{border-top:1px solid var(--line)}details.more summary{padding:10px 16px;cursor:pointer;font:600 14px var(--fc);color:var(--mute)}
+.explain{padding:10px 16px;border-top:1px solid var(--line);font-size:14.5px;background:var(--panel2)}
+.explain .lab{font:700 12px var(--fc);color:var(--amber);display:block;margin-bottom:2px}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;padding:6px 16px 12px}
+.checks h4{grid-column:1/-1;margin:6px 0 0;font:700 13px var(--fc);color:var(--mute);text-transform:uppercase;letter-spacing:.05em}
+.ck{font-size:13.5px}.ck:before{content:"✓";color:var(--ok);font-weight:700;margin-right:6px}.ck.no:before{content:"✗";color:var(--pe)}
+.ck small{display:block;color:var(--mute);margin-left:18px;font-size:12.5px}
+.tl{list-style:none;margin:0;padding:6px 16px 12px}.tl li{display:grid;grid-template-columns:78px 1fr;gap:8px;padding:4px 0;border-bottom:1px dashed var(--line);font-size:13.5px}
+.tl time{font:600 13px var(--fc);color:var(--amber)}
+.spark{display:flex;gap:10px;padding:0 16px 10px;flex-wrap:wrap}.spark figure{margin:0;flex:1;min-width:200px}.spark figcaption{font:600 12px var(--fc);color:var(--mute)}
+.spark svg{width:100%;height:60px;display:block}
+.cf{display:flex;gap:8px;padding:10px 16px 14px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line)}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padding:8px 14px;cursor:pointer;font:600 14px var(--fc)}
+.btn.pri{background:var(--amber);border-color:var(--amber);color:#1a1205}
+.list{background:var(--panel);border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.row{display:grid;grid-template-columns:minmax(150px,1.3fr) 110px minmax(120px,1fr) minmax(200px,2.4fr);gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);align-items:center}
+.row:last-child{border:0}.row .s{font:700 17px var(--fc)}.row .s.ce{color:var(--ce)}.row .s.pe{color:var(--pe)}
+.row .why{font-size:13.5px;color:var(--mute)}.row .num{font:600 15px var(--fc)}
+.meter{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:4px}.meter i{display:block;height:100%;background:var(--amber)}
+.empty{padding:28px 18px;text-align:center;color:var(--mute);background:var(--panel);border:1px dashed var(--line);border-radius:5px}
+.empty b{display:block;font:700 22px var(--fc);color:var(--ink);margin-bottom:4px}
+table.t{width:100%;border-collapse:collapse;font-size:14px}.t th{text-align:left;font:600 13px var(--fc);color:var(--mute);padding:8px 10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel2)}
+.t td{padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}.t .n{text-align:right}
+.scroll{overflow-x:auto;max-height:70vh}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:5px;margin-bottom:14px}.pad{padding:14px 16px}
+h3{font:700 18px var(--fc);margin:0 0 8px}
+.flow{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0}.flow span{font:600 12.5px var(--fc);padding:4px 8px;border-radius:3px;background:var(--panel2);color:var(--mute)}
+.flow span.on{background:var(--amber);color:#1a1205}.flow span.done{color:var(--ok)}
+.jc{display:grid;grid-template-columns:1fr 1fr;gap:3px 14px;font-size:13.5px;margin-top:6px}
+.note{color:var(--mute);font-size:13.5px}
+input.s{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padding:7px 10px;width:200px}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:10px 16px;border-radius:4px;opacity:0;transition:.2s;pointer-events:none;font-weight:600;z-index:20}
+#toast.on{opacity:1}
+@media (max-width:640px){.big{grid-template-columns:1fr 1fr}.big div:nth-child(2){border-right:0}.big div:nth-child(3){grid-column:1/-1;border-top:1px solid var(--line)}.big b{font-size:21px}.lv b{font-size:15px}.ladder{padding:10px 2px 2px}.checks{grid-template-columns:1fr}.row{grid-template-columns:1fr 1fr}.row .why{grid-column:1/-1}.bar1{padding:8px 12px 4px}main{padding:12px 10px 60px}.tools{margin-left:0}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style></head><body>
+<header class="top">
+ <div class="bar1"><div class="brand">KRT <b>Options</b> Terminal</div><span id="feed" class="feed disconnected">Connecting…</span>
+  <div class="meta"><span id="clock"></span><span id="phase"></span><span id="nifty"></span></div>
+  <div class="tools"><button class="ib" id="lang" aria-pressed="false" title="Explanation language">தமிழ்</button><button class="ib" id="snd" aria-pressed="false" title="Sound on new events">🔔 Sound</button></div></div>
+ <nav class="tabs" role="tablist"><button data-t="calls" role="tab" aria-selected="true">Calls<span class="n" id="n-calls"></span></button><button data-t="near" role="tab">Near trigger<span class="n" id="n-near"></span></button><button data-t="jack" role="tab">🔥 Jackpot Watch<span class="n" id="n-jack"></span></button><button data-t="perf" role="tab">Performance</button><button data-t="levels" role="tab">Levels</button><button data-t="rules" role="tab">Rules</button></nav>
+</header>
+<div id="alertbar" class="warnbar" hidden></div>
+<main>
+ <section id="calls"><div class="strip" id="strip"></div><div class="chips" id="chips"></div><div id="callgrid"></div></section>
+ <section id="near" hidden><p class="note">Stocks from today's watchlist, closest to their trigger first. No entry until a 5-minute candle closes beyond the trigger and every check passes.</p><div class="list" id="nearlist"></div></section>
+ <section id="jack" hidden><div class="panel pad"><h3>🔥 Jackpot Watch: strong-move candidates</h3><p class="note">Setups with a tight 3-day range (coil) that can break out hard. A 🔥 call needs all five: coil, volume at 1.5× pace, first-5-minute range break, NIFTY in the same direction, and room to T1. This marks a stronger setup; it does <b>not</b> promise 2× or 5× and is not a win probability. Whether these filters actually help is tracked in Performance.</p></div><div class="grid" id="jackgrid"></div></section>
+ <section id="perf" hidden>
+  <div class="panel pad"><h3>Forward calls (recorded live by this terminal)</h3><p class="note" id="perf-note"></p><div class="strip" id="perfstrip"></div>
+   <div class="chips" id="perfchips"><button class="chip" data-p="all" aria-pressed="true">All calls</button><button class="chip" data-p="strong" aria-pressed="false">🔥 only</button><button class="chip" data-p="mine" aria-pressed="false">Trades I took</button></div>
+   <div class="scroll"><table class="t" id="histtbl"></table></div></div>
+  <div class="panel pad" style="opacity:.85"><h3>Old package backtest <span class="pill bad">Unverified</span></h3><p class="note" id="btnote"></p></div>
+ </section>
+ <section id="levels" hidden><div class="panel"><div class="pad" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">Levels for today</h3><input class="s" id="lvq" placeholder="Search symbol" aria-label="Search symbol"><span class="note" id="lvnote"></span></div><div class="scroll" id="lvtbl"></div></div></section>
+ <section id="rules" hidden><div class="panel pad" id="rulebox"></div></section>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+<script>
+"use strict";
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const U=Object.assign({lang:'en',sound:false,filter:'active',pf:'all'},store.get('krt_ui',{}));const saveU=()=>store.set('krt_ui',U);
+let ST=null,HIST=[],LV=[],BT=null,OFF=0,FETCHED=0,SEEN=store.get('krt_seen',{}),MINE=store.get('krt_mine',{}),FIRST=true;
+const f2=n=>n==null||isNaN(n)?'–':Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const rs=n=>n==null||isNaN(n)?'–':(n<0?'−₹':'₹')+Math.round(Math.abs(n)).toLocaleString('en-IN');
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('on'),2600)}
+const TA=()=>U.lang==='ta';
+const SRC=live=>live?'<span class="src live">LIVE</span>':'<span class="src est" title="Estimated from Black-Scholes, not a traded price">EST</span>';
+const STAT={ACTIVE:['Active','ok'],CLOSED:['Closed','mute'],NEAR:['Near trigger','am'],BREAKOUT:['Breakout · wait for candle close','am'],WATCHING:['Watching','mute'],BLOCKED:['Not taken','bad'],INVALID:['Invalid','bad'],EXPIRED:['Expired','mute']};
+const TAST={ACTIVE:'Active',CLOSED:'முடிந்தது',NEAR:'Trigger அருகில்',BREAKOUT:'Breakout · candle close காத்திருக்கவும்',WATCHING:'கவனிப்பில்',BLOCKED:'எடுக்கப்படவில்லை',INVALID:'ரத்து',EXPIRED:'நேரம் முடிந்தது'};
+
+/* ---------------- data ---------------- */
+async function j(u){const r=await fetch(u,{cache:'no-store'});if(r.status===401)throw Error('login');if(!r.ok)throw Error(r.status);return r.json()}
+async function poll(){try{const s=await j('/api/state');ST=s;FETCHED=Date.now();OFF=Date.parse(s.now)-Date.now();events();render()}catch(e){feed('disconnected','Server not reachable')}}
+async function slow(){try{HIST=await j('/api/history');if(!$('#perf').hidden)renderPerf()}catch(e){}}
+async function once(){try{LV=await j('/api/levels');BT=await j('/api/backtest')}catch(e){}}
+
+/* ---------------- header ---------------- */
+function feed(cls,txt){const f=$('#feed');f.className='feed '+cls;f.textContent=txt}
+function tickHeader(){const now=new Date(Date.now()+OFF),ist=new Date(now.getTime()+(now.getTimezoneOffset()+330)*60000);
+  $('#clock').innerHTML='<b>'+ist.toLocaleTimeString('en-GB')+'</b> IST';
+  if(!ST)return;const fd=ST.feed,age=fd.poll_age==null?null:Math.round(fd.poll_age+(Date.now()-FETCHED)/1000);
+  const h=fd.health,br=fd.broker||'';const since=Date.now()-FETCHED>15000?'disconnected':h;
+  feed(since,since==='live'?`Live · ${br} · ${age}s ago`:since==='delayed'?`Delayed · ${br} · ${age}s old`:fd.error?'Disconnected · '+fd.error:'Disconnected');
+  const m=ist.getHours()*60+ist.getMinutes(),wd=ist.getDay()>0&&ist.getDay()<6,c=ST.cfg;
+  $('#phase').textContent=ST.market_open?(m<toM(c.entry)?'Opening · entries from '+c.entry:m<toM(c.cut)?'Market open · entries allowed':m<toM(c.sq)?'No new entries after '+c.cut:'Square-off '+c.sq):(wd&&m<555?'Pre-open':'Market closed');
+  $('#nifty').innerHTML=ST.nifty?`NIFTY <b>${f2(ST.nifty.ltp)}</b> <span class="${ST.nifty.chg>=0?'up':'dn'}">${ST.nifty.chg==null?'':(ST.nifty.chg>=0?'+':'')+ST.nifty.chg.toFixed(2)+'%'}</span>`:''}
+const toM=s=>{const[a,b]=s.split(':');return +a*60+ +b};
+
+/* ---------------- events: sound + toast ---------------- */
+function events(){let n=0,last=null;for(const c of ST.calls)for(const e of c.events){if(!['entry','t1','t2','t3','sl','exit'].includes(e.kind))continue;const k=c.id+e.kind+e.t;if(SEEN[k])continue;SEEN[k]=1;n++;last=[c,e]}
+  store.set('krt_seen',SEEN);if(FIRST){FIRST=false;return}
+  if(n&&last){toast(`${last[1].t} · ${last[0].contract?last[0].contract.name:last[0].sym}: ${last[1].kind.toUpperCase()}`);if(U.sound)beep(last[1].kind);
+    if(U.sound&&'Notification'in window&&Notification.permission==='granted')new Notification('KRT · '+(last[0].contract||{}).name,{body:last[1].text})}}
+let AC;function beep(kind){try{AC=AC||new AudioContext();const seq=kind==='entry'?[660,880]:kind.startsWith('t')?[880,1175]:[330,220];seq.forEach((f,i)=>{const o=AC.createOscillator(),g=AC.createGain();o.frequency.value=f;o.connect(g);g.connect(AC.destination);const t=AC.currentTime+i*.18;g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+.16);o.start(t);o.stop(t+.17)})}catch(e){}}
+
+/* ---------------- explanations (rule-based, never invents numbers) ---------------- */
+const TAN={'Entry not late':'late entry (move ஏற்கனவே நடந்துவிட்டது)','Volume above normal pace':'volume போதவில்லை','NIFTY not against the trade':'NIFTY எதிர் திசையில் உள்ளது','Room to T1':'T1-க்கு முன் 3-நாள் high/low தடையாக உள்ளது','Open-call limit':'ஏற்கனவே அதிக calls active','Tradable option contract':'சரியான option contract இல்லை (spread / volume / risk)'};
+function explain(c){const ce=c.side==='CE',f=c.f,fails=(c.checks||[]).filter(x=>!x.ok),pass=(c.checks||[]).filter(x=>x.ok);
+  const trendEN=ce?'Trend is up (price above its 20- and 50-day averages) and above the monthly AVWAP.':'Trend is down (price below its 20- and 50-day averages) and below the monthly AVWAP.';
+  const trendTA=ce?'Trend மேல்நோக்கி உள்ளது; விலை monthly AVWAP-க்கு மேல்.':'Trend கீழ்நோக்கி உள்ளது; விலை monthly AVWAP-க்கு கீழ்.';
+  const lvl=ce?'top of the 3-day value area':'bottom of the 3-day value area';
+  if(TA()){switch(c.status){
+    case'WATCHING':return `${trendTA} Trigger ${f2(c.trig)} இன்னும் வரவில்லை. வந்தாலும் 5-நிமிட candle close வரை காத்திருக்கவும்.`;
+    case'NEAR':return `${c.sym} trigger ${f2(c.trig)}-க்கு அருகில் உள்ளது. இப்போதே வாங்க வேண்டாம்; candle close-க்காக காத்திருக்கவும்.`;
+    case'BREAKOUT':return `Trigger தாண்டியுள்ளது, ஆனால் 5-நிமிட candle இன்னும் close ஆகவில்லை. Close ஆன பிறகு checks pass ஆனால் மட்டுமே entry.`;
+    case'BLOCKED':return `Candle trigger-ஐ தாண்டி close ஆனது, ஆனால் entry இல்லை. காரணம்: ${fails.map(x=>TAN[x.name]||x.name).join(', ')}. அடுத்த candle-ல் மீண்டும் check செய்யப்படும்.`;
+    case'INVALID':return `Entry-க்கு முன்பே SL level ${f2(c.sl)} உடைந்தது. இந்த setup இன்று ரத்து.`;
+    case'EXPIRED':return `Cut-off நேரத்திற்குள் confirmed entry வரவில்லை. இன்று இந்த stock-ல் trade இல்லை.`;
+    case'ACTIVE':{const h=c.hits.map(x=>x.name);return `${c.sym} ${c.entry.bar} 5-நிமிட candle ${f2(c.entry.spot)}-ல் close ஆகி trigger ${f2(c.trig)}-ஐ தாண்டியது. ${trendTA} எல்லா stock + option checks-ம் pass ஆனது; entry ${c.entry.t}-க்கு எடுக்கப்பட்டது. ${h.length?h[h.length-1]+' அடைந்தது; SL இப்போது '+f2(c.stop)+'.':'SL spot '+f2(c.stop)+'.'}`}
+    case'CLOSED':return `${c.reason}. Net ${rs(c.pnl&&c.pnl.net)} (costs சேர்த்து).`}}
+  switch(c.status){
+    case'WATCHING':return `${trendEN} The trigger is ${f2(c.trig)} (${lvl}, beyond yesterday's ${ce?'high':'low'}). Nothing to do until a 5-minute candle closes beyond it.`;
+    case'NEAR':return `${c.sym} is close to its trigger ${f2(c.trig)}. Don't buy early: the rule waits for a 5-minute candle to close beyond it.`;
+    case'BREAKOUT':return `Price is beyond ${f2(c.trig)}, but the 5-minute candle hasn't closed yet. Entry comes only after the close and only if every check passes.`;
+    case'BLOCKED':return `A candle closed beyond the trigger, but the call was not taken: ${fails.map(x=>(x.fail||x.name).toLowerCase()+' ('+x.detail+')').join('; ')}. It is re-checked at every new candle close.`;
+    case'INVALID':return `The stop level ${f2(c.sl)} broke before any entry, so today's setup is cancelled.`;
+    case'EXPIRED':return `No confirmed entry before the ${ST.cfg.cut} cut-off. No trade in ${c.sym} today.`;
+    case'ACTIVE':{const h=c.hits.map(x=>x.name);return `The ${c.entry.bar} candle closed at ${f2(c.entry.spot)}, beyond the ${f2(c.trig)} trigger. ${trendEN} All ${pass.length} stock and option checks passed, so the entry was taken at ${c.entry.t}. ${h.length?h[h.length-1]+' is done; stop is now '+f2(c.stop)+'.':'Stop is spot '+f2(c.stop)+'.'}`}
+    case'CLOSED':return `${c.reason}. Net ${rs(c.pnl&&c.pnl.net)} after estimated costs and slippage.`}}
+
+/* ---------------- calls ---------------- */
+const GROUPS={active:['ACTIVE'],near:['NEAR','BREAKOUT'],closed:['CLOSED'],skip:['BLOCKED','INVALID','EXPIRED'],watch:['WATCHING']};
+function render(){tickHeader();const C=ST.calls,cnt=k=>C.filter(c=>GROUPS[k].includes(c.status)).length;
+  $('#n-calls').textContent=cnt('active')+cnt('closed')||'';$('#n-near').textContent=cnt('near')||'';$('#n-jack').textContent=C.filter(c=>c.parts.coil>=7.5).length||'';
+  const taken=C.filter(c=>c.entry),net=taken.reduce((a,c)=>a+(c.pnl?c.pnl.net:0),0),wins=C.filter(c=>c.status==='CLOSED'&&c.pnl&&c.pnl.net>0).length,loss=C.filter(c=>c.status==='CLOSED'&&c.pnl&&c.pnl.net<=0).length;
+  $('#strip').innerHTML=[['Calls today',taken.length],['Active now',cnt('active')],['Closed · won / lost',`${wins} / ${loss}`],['Net today (after costs)',`<span class="${net>=0?'up':'dn'}">${rs(net)}</span>`],['Watching',`${cnt('watch')+cnt('near')} of ${C.length}`]].map(([a,b])=>`<div><small>${a}</small><b>${b}</b></div>`).join('');
+  $('#chips').innerHTML=[['active','Active'],['near','Near trigger'],['closed','Closed'],['skip','Not taken / invalid'],['watch','Watching']].map(([k,l])=>`<button class="chip" data-f="${k}" aria-pressed="${U.filter===k}">${l}<i>${cnt(k)}</i></button>`).join('');
+  const L=C.filter(c=>GROUPS[U.filter].includes(c.status)).sort((a,b)=>(b.entry?.t||'').localeCompare(a.entry?.t||'')||b.score-a.score);
+  const alertbar=$('#alertbar');
+  if(ST.feed.health!=='live'&&ST.market_open){alertbar.hidden=false;alertbar.className='warnbar';alertbar.textContent=ST.feed.health==='delayed'?'Prices are delayed. Do not act on calls until the badge shows Live.':'Feed disconnected. Calls are frozen; check the server.'}else alertbar.hidden=true;
+  if(!L.length){$('#callgrid').innerHTML=U.filter==='active'?`<div class="empty"><b>${TA()?'இப்போது trade இல்லை':'No trade right now'}</b>${TA()?'எல்லா confirmations-ம் pass ஆன setup வந்தால் இங்கே தோன்றும்.':'A call appears here only when a 5-minute candle closes beyond a trigger and every check passes. Waiting is part of the plan.'}${cnt('near')?`<br><br><button class="btn" data-f="near">${cnt('near')} near trigger →</button>`:''}</div>`:'<div class="empty">Nothing here yet.</div>'}
+  else $('#callgrid').innerHTML=`<div class="grid">${L.map(c=>c.entry?card(c):mini(c)).join('')}</div>`;
+  if(!$('#near').hidden)renderNear();if(!$('#jack').hidden)renderJack()}
+function card(c){const e=c.entry,L=c.levels,k=c.contract,ce=c.side==='CE',live=c.status==='ACTIVE',o=c.opt||{},p=c.pnl||{},hits=Object.fromEntries(c.hits.map(h=>[h.name,h]));
+  const slHit=c.status==='CLOSED'&&/SL|stop/i.test(c.reason)&&!c.hits.length;const exitEv=c.events.filter(x=>['sl','exit'].includes(x.kind)).pop();
+  const nowPx=live?(o.bid||o.ltp):null;const st=STAT[c.status];
+  const lv=(cls,lab,spot,prem,liveP,when,cur)=>`<div class="lv ${cls}${cur?' cur':''}"><div class="dot"></div><small>${lab}</small><b>₹${f2(prem)}${SRC(liveP)}</b><span>spot ${f2(spot)}</span>${when?`<span class="when">${when}</span>`:''}</div>`;
+  const tgt=i=>{const h=hits['T'+(i+1)];return lv('t'+(h?' hit':''),'T'+(i+1),L.t[i],h?h.prem:L.est.t[i],!!h,h?'✓ '+h.t:'')};
+  const ex=c.lots===1?'1 lot: T1 → stop to cost, T2 → stop to T1, T3 exit':c.lots===2?'2 lots: 1 out at T1 (stop to cost), last lot trails to T3':`${c.lots} lots: a third out at each target`;
+  return `<article class="card ${ce?'ce':'pe'}"><div class="ch"><div><h2>${esc(k.name)}</h2><div class="sub">${ce?'BUY CALL':'BUY PUT'} · lot ${k.lot} × ${c.lots} · quality ${c.score.toFixed(0)}/100${c.strong?' · 🔥 strong move':''}</div></div>
+   <div class="right"><span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div></div>
+   <div class="big"><div><small>Entry · ${e.t} IST</small><b>₹${f2(e.prem)}${SRC(true)}</b><em>don't buy above ₹${f2(e.chase)}</em></div>
+    <div><small>${live?'Now (bid)':'Exit'}</small><b>${live?'₹'+f2(nowPx)+SRC(!!o.ltp):exitEv?'₹'+f2(exitEv.prem)+SRC(true):c.hits.length?'₹'+f2(c.hits[c.hits.length-1].prem)+SRC(true):'–'}</b><em>${live?`<span class="${p.pct>=0?'up':'dn'}">${p.pct>=0?'+':''}${(p.pct||0).toFixed(1)}%</span>`:exitEv?exitEv.t+' IST':''}</em></div>
+    <div><small>Net P&amp;L (after costs)</small><b class="${(p.net||0)>=0?'up':'dn'}">${rs(p.net)}</b><em>risk was ${rs(e.risk_lot*c.lots)}</em></div></div>
+   <div class="ladder">${lv('sl'+(slHit?' hitsl':''),c.stop!==L.sl&&live?'Stop (moved)':'Stop loss',live?c.stop:L.sl,live&&c.stop!==L.sl?(Math.abs(c.stop-L.t[0])<1e-6?(hits.T1?hits.T1.prem:L.est.t[0]):e.prem):L.est.sl,false,slHit&&exitEv?'✗ '+exitEv.t:'',live&&c.stop===L.sl)}${lv('en','Entry',e.spot,e.prem,true,e.t)}${tgt(0)}${tgt(1)}${tgt(2)}</div>
+   <div class="rule"><b>Exit rule:</b> ${ex}. Square-off ${ST.cfg.sq}. Levels are on the stock price; option prices at targets are ${SRC(false)} until hit.</div>
+   <div class="explain"><span class="lab">${TA()?'ஏன் இந்த call?':'Why this call'}</span>${esc(explain(c))}</div>
+   ${c.spark.length>2?`<div class="spark"><figure><figcaption>Spot · 5-min closes</figcaption>${spark(c.spark,[L.sl,e.spot,...L.t])}</figure>${c.ospark.length>1?`<figure><figcaption>Option · 5-min</figcaption>${spark(c.ospark,[e.prem])}</figure>`:''}</div>`:''}
+   <details class="more"><summary>Timeline, checks &amp; contract details</summary><ul class="tl">${c.events.map(x=>`<li><time>${x.t}</time><span>${esc(x.text)}</span></li>`).join('')}</ul>${checksHTML(c)}
+   <div class="rule">Expiry ${k.expiry} · IV at entry ${(e.iv*100).toFixed(1)}% · delta ${e.delta.toFixed(2)} · spot R ${f2(L.R)}</div></details>
+   <div class="cf"><button class="btn pri" data-copy="${c.id}">Copy call</button><label class="note"><input type="checkbox" data-mine="${c.id}" ${MINE[c.id]?'checked':''}> I took this trade</label></div></article>`}
+function checksHTML(c){if(!c.checks||!c.checks.length)return'';const g=n=>c.checks.filter(x=>x.group===n).map(x=>`<div class="ck ${x.ok?'':'no'}">${esc(x.name)}<small>${esc(x.detail)}</small></div>`).join('');return `<div class="checks"><h4>Stock checks</h4>${g('stock')}<h4>Option checks</h4>${g('option')}</div>`}
+function mini(c){const ce=c.side==='CE',st=STAT[c.status],d=c.spot?Math.abs(c.trig-c.spot):null;
+  return `<article class="card ${ce?'ce':'pe'}"><div class="ch"><div><h2>${c.sym} ${c.side}</h2><div class="sub">Trigger ${f2(c.trig)} · stop ${f2(c.sl)} · spot ${f2(c.spot)} · quality ${c.score.toFixed(0)}/100</div></div><div class="right"><span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div></div>
+   <div class="explain"><span class="lab">${TA()?'நிலை':'Status'}</span>${esc(explain(c))}</div>${checksHTML(c)}</article>`}
+function spark(pts,lines){const v=pts.map(p=>+p[1]),all=v.concat(lines),mn=Math.min(...all),mx=Math.max(...all),W=300,H=60,x=i=>i/(v.length-1||1)*W,y=a=>H-4-(a-mn)/((mx-mn)||1)*(H-8);
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${lines.map((l,i)=>`<line x1="0" x2="${W}" y1="${y(l)}" y2="${y(l)}" stroke="${i===0&&lines.length>2?'var(--pe)':i===1||lines.length===1?'var(--mute)':'var(--ok)'}" stroke-dasharray="3 3" stroke-width="1"/>`).join('')}<polyline fill="none" stroke="var(--amber)" stroke-width="2" points="${v.map((a,i)=>x(i)+','+y(a)).join(' ')}"/></svg>`}
+
+/* ---------------- near trigger / jackpot ---------------- */
+function renderNear(){const L=ST.calls.filter(c=>['NEAR','BREAKOUT','WATCHING','BLOCKED'].includes(c.status)&&c.spot).map(c=>({c,d:(c.side==='CE'?c.trig-c.spot:c.spot-c.trig)/c.planR})).sort((a,b)=>a.d-b.d);
+  $('#nearlist').innerHTML=L.length?L.map(({c,d})=>{const st=STAT[c.status],pct=Math.max(0,Math.min(100,(1-Math.max(0,d)/3)*100));return `<div class="row"><div><span class="s ${c.side.toLowerCase()}">${c.sym} ${c.side}</span><div class="note">quality ${c.score.toFixed(0)}</div></div><div><span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div><div class="num">spot ${f2(c.spot)}<br><span class="note">trigger ${f2(c.trig)}</span><div class="meter"><i style="width:${pct}%"></i></div></div><div class="why">${esc(explain(c))}</div></div>`}).join(''):'<div class="empty">No live prices yet. The list fills once the market opens.</div>'}
+function renderJack(){const ORD={ACTIVE:0,CLOSED:1,BREAKOUT:2,NEAR:3,BLOCKED:4,WATCHING:5,INVALID:6,EXPIRED:7};const L=ST.calls.filter(c=>c.parts.coil>=7.5).sort((a,b)=>b.strong-a.strong||ORD[a.status]-ORD[b.status]||b.score-a.score);
+  $('#jackgrid').innerHTML=L.length?L.map(c=>{const stage=c.status==='CLOSED'?(c.hits.length?'Target':'SL'):c.status==='ACTIVE'?'Triggered':c.strong?'Confirmed':['INVALID','EXPIRED'].includes(c.status)?'Expired':'Watching';
+   const flow=['Watching','Confirmed','Triggered','Target','SL','Expired'].map(s=>`<span class="${s===stage?'on':''}">${s}</span>`).join('');
+   const ck=(ok,t)=>`<div class="ck ${ok?'':'no'}">${t}</div>`,pace=(c.checks||[]).find(x=>x.name.startsWith('Volume'));
+   return `<article class="card ${c.side.toLowerCase()}"><div class="ch"><div><h2>${c.strong?'🔥 ':''}${c.contract?esc(c.contract.name):c.sym+' '+c.side}</h2><div class="sub">Trigger ${f2(c.trig)} · quality ${c.score.toFixed(0)}/100${c.entry?' · entry '+c.entry.t:''}</div></div></div><div class="pad" style="padding-top:0"><div class="flow">${flow}</div>
+    <div class="jc">${ck(true,'Tight 3-day coil')}${ck(pace&&parseFloat(pace.detail)>=1.5,'Volume ≥1.5× pace'+(pace?' ('+pace.detail.split(' ')[0]+')':''))}${ck(c.orb_break,'First-5-min range break')}${ck(ST.nifty&&(c.side==='CE'?ST.nifty.chg>0:ST.nifty.chg<0),'NIFTY same direction')}${ck(!(c.checks||[]).some(x=>x.name==='Room to T1'&&!x.ok),'Room to T1')}</div>
+    <p class="note" style="margin:8px 0 0">${esc(explain(c))}</p></div></article>`}).join(''):'<div class="empty">No coiled setups in today\'s watchlist.</div>'}
+
+/* ---------------- performance ---------------- */
+function renderPerf(){let H=HIST.slice().reverse();if(U.pf==='strong')H=H.filter(h=>h.strong);if(U.pf==='mine')H=H.filter(h=>MINE[h.id]);
+  const w=H.filter(h=>h.pnl>0),l=H.filter(h=>h.pnl<=0),net=H.reduce((a,h)=>a+h.pnl,0),aw=w.length?w.reduce((a,h)=>a+h.pnl,0)/w.length:0,al=l.length?l.reduce((a,h)=>a+h.pnl,0)/l.length:0;
+  let eq=0,pk=0,dd=0;for(const h of HIST.filter(x=>H.includes(x))){eq+=h.pnl;pk=Math.max(pk,eq);dd=Math.max(dd,pk-eq)}
+  $('#perf-note').innerHTML=H.length<30?`<b>${H.length} call${H.length===1?'':'s'} so far.</b> Under 30 calls the numbers are mostly luck; don't judge the strategy yet.`:'Every call below was decided live at a candle close, with live option prices. Nothing uses information from after the call.';
+  $('#perfstrip').innerHTML=[['Calls',H.length],['Win rate',H.length?(w.length/H.length*100).toFixed(1)+'%':'–'],['Avg win',rs(aw)],['Avg loss',rs(al)],['Expectancy / call',H.length?rs(net/H.length):'–'],['Net',rs(net)],['Max drawdown',rs(-dd)]].map(([a,b])=>`<div><small>${a}</small><b>${b}</b></div>`).join('');
+  $$('#perfchips .chip').forEach(b=>b.setAttribute('aria-pressed',b.dataset.p===U.pf));
+  $('#histtbl').innerHTML='<thead><tr><th>Date</th><th>Contract</th><th>Entry</th><th class="n">Entry ₹</th><th>Targets hit</th><th>Result</th><th class="n">Net</th><th>Took it</th></tr></thead><tbody>'+H.map(h=>`<tr><td>${h.day}</td><td>${h.strong?'🔥 ':''}${esc(h.contract)}</td><td>${h.entry_time||''}</td><td class="n">${f2(h.entry)}</td><td>${h.hits.join(' ')||'–'}</td><td>${esc(h.result)}</td><td class="n ${h.pnl>=0?'up':'dn'}">${rs(h.pnl)}</td><td><input type="checkbox" data-mine="${h.id}" ${MINE[h.id]?'checked':''} aria-label="I took this"></td></tr>`).join('')+'</tbody>';
+  if(BT)$('#btnote').innerHTML=`The original package claimed ${BT.trades} trades, ${BT.win.toFixed(1)}% wins, profit factor ${BT.pf_net.toFixed(2)} and ${rs(BT.net)} net. Those numbers are <b>not proof</b>: option prices were invented, entries used that day's closing price, and when stop and target fell on the same day the target was counted. Judge the strategy on the forward calls above.`}
+
+/* ---------------- levels / rules ---------------- */
+function renderLevels(){const q=($('#lvq').value||'').toUpperCase(),R=LV.filter(r=>!q||r.sym.includes(q)).sort((a,b)=>(b.score||0)-(a.score||0));
+  $('#lvnote').textContent=LV.length?`from the ${LV[0].date} close`:'';
+  $('#lvtbl').innerHTML='<table class="t"><thead><tr><th>Symbol</th><th class="n">Last</th><th class="n">VAL</th><th class="n">VAH</th><th class="n">Monthly AVWAP</th><th>Side</th><th>Trend</th><th class="n">Quality</th><th class="n">Lot</th></tr></thead><tbody>'+R.map(r=>`<tr><td><b>${r.sym}</b></td><td class="n">${f2(r.last)}</td><td class="n dn">${f2(r.val)}</td><td class="n up">${f2(r.vah)}</td><td class="n">${f2(r.aw)}</td><td>${r.side||'inside'}</td><td>${r.side?(r.trend?'aligned':'against'):''}</td><td class="n">${r.score??''}</td><td class="n">${r.lot??''}</td></tr>`).join('')+'</tbody></table>'}
+function renderRules(){const c=ST?ST.cfg:{};$('#rulebox').innerHTML=`<h3>One rulebook for every call</h3>
+ <p><b>1. Watchlist (before 09:15).</b> Stocks whose previous close is outside the 3-day value area, on the monthly-AVWAP side, with trend aligned (price above 20- and 50-day averages for CE, below for PE) and quality score ≥ ${c.min_score}. Quality score is a setup grade, not a win chance.</p>
+ <p><b>2. Trigger.</b> Value-area edge ±0.5%, beyond yesterday's high (CE) or low (PE). The stop level is fixed the night before: back inside the value area, 0.4–0.8 ATR away.</p>
+ <p><b>3. Entry.</b> Only when a completed ${c.bar}-minute candle closes beyond the trigger, from ${c.entry} to ${c.cut}. At that moment every check must pass: not more than 0.5R past the trigger (late-entry blocker), volume ≥ ${c.vol_pace}× normal pace, NIFTY not against the trade, no 3-day high/low before T1, and fewer than the maximum open calls.</p>
+ <p><b>4. Option choice.</b> From the real exchange contract list (actual expiry, strike, lot): near-the-money strikes are quoted live; any with spread over ${c.spread}%, fewer than ${c.min_opt_lots} lots traded, or a stale quote is skipped. The strike closest to delta ${c.delta} whose risk fits is chosen. Entry price = live ask; don't pay more than 5% above it.</p>
+ <p><b>5. Risk.</b> Risk per lot = (entry − estimated premium at the spot stop) × lot size + costs and 0.9% slippage. Over ₹${Number(c.risk).toLocaleString('en-IN')} → skipped. The stop is never tightened to make risk fit. Gaps and slippage can still make a real loss bigger than planned.</p>
+ <p><b>6. Targets and exits.</b> T1/T2/T3 = entry spot ±1R/2R/3R. One lot: T1 moves the stop to cost, T2 moves it to T1, T3 exits. Two lots: one out at T1, the rest trails. Three or more: a third at each target. Everything left exits at ${c.sq}.</p>
+ <p><b>7. Timing.</b> Entry time is the candle close. Target and stop times are the first price update that touched the level (every few seconds). If a stop and target both fall inside one update, the stop is counted.</p>
+ <p class="note">Premiums marked ${SRC(false)} are Black-Scholes estimates; ${SRC(true)} means a traded or quoted price from your broker. Not investment advice.</p>`}
+
+/* ---------------- copy call ---------------- */
+function callText(c){const e=c.entry,L=c.levels,k=c.contract;return `${c.strong?'🔥 ':''}KRT CALL · ${c.side==='CE'?'BUY CALL':'BUY PUT'}\n${k.name} (lot ${k.lot} × ${c.lots})\nEntry ₹${f2(e.prem)} – ${f2(e.chase)} at ${e.t} IST (don't buy above ${f2(e.chase)})\nSL spot ${f2(L.sl)} ≈ ₹${f2(L.est.sl)}\n${L.t.map((t,i)=>`T${i+1} spot ${f2(t)} ≈ ₹${f2(L.est.t[i])}`).join('\n')}\nExpiry ${k.expiry} · square-off ${ST.cfg.sq}\nQuality ${c.score.toFixed(0)}/100 (not a win chance) · Not investment advice`}
+
+/* ---------------- nav & events ---------------- */
+function go(t){$$('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));$$('main>section').forEach(s=>s.hidden=s.id!==t);
+  if(!ST)return;({calls:render,near:renderNear,jack:renderJack,perf:renderPerf,levels:renderLevels,rules:renderRules})[t]()}
+document.addEventListener('click',e=>{const t=e.target.closest('nav.tabs button');if(t)return go(t.dataset.t);
+  const f=e.target.closest('[data-f]');if(f){U.filter=f.dataset.f;saveU();if($('#calls').hidden)go('calls');return render()}
+  const p=e.target.closest('[data-p]');if(p){U.pf=p.dataset.p;saveU();return renderPerf()}
+  const cp=e.target.closest('[data-copy]');if(cp){const c=ST.calls.find(x=>x.id===cp.dataset.copy);navigator.clipboard?.writeText(callText(c)).then(()=>toast('Call copied'),()=>toast('Copy blocked by the browser'));return}});
+document.addEventListener('change',e=>{const m=e.target.closest('[data-mine]');if(m){MINE[m.dataset.mine]=m.checked;if(!m.checked)delete MINE[m.dataset.mine];store.set('krt_mine',MINE);if(!$('#perf').hidden)renderPerf()}});
+$('#lang').onclick=()=>{U.lang=U.lang==='en'?'ta':'en';saveU();$('#lang').setAttribute('aria-pressed',TA());$('#lang').textContent=TA()?'English':'தமிழ்';render()};
+$('#snd').onclick=()=>{U.sound=!U.sound;saveU();$('#snd').setAttribute('aria-pressed',U.sound);if(U.sound){beep('entry');if('Notification'in window&&Notification.permission==='default')Notification.requestPermission()}};
+$('#lvq').oninput=renderLevels;
+$('#lang').setAttribute('aria-pressed',TA());$('#lang').textContent=TA()?'English':'தமிழ்';$('#snd').setAttribute('aria-pressed',U.sound);
+once().then(()=>{poll();slow()});setInterval(poll,2000);setInterval(slow,30000);setInterval(tickHeader,1000);
+</script></body></html>
