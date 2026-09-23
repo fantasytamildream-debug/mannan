@@ -34,7 +34,7 @@ class Engine:
         self.t_entry, self.t_cut, self.t_sq = hm(cfg.get("ENTRY_START", "09:25")), hm(cfg.get("NO_NEW_ENTRY", "14:30")), hm(cfg.get("SQUARE_OFF", "15:15"))
         self.lock = threading.RLock(); self.day = None; self.calls = {}; self.bars = {}; self.q = {}; self.optq = {}
         self.feed = dict(status="starting", last_poll=None, exch_age=None, error="", broker=getattr(broker, "name", ""))
-        self._dirty = 0.0; self.source = cfg.get("_SOURCE", "live"); self._plan_at = 0.0; self.autosave = self.source == "live"
+        self._dirty = 0.0; self.on_file = lambda p: None; self.source = cfg.get("_SOURCE", "live"); self._plan_at = 0.0; self.autosave = self.source == "live"
 
 
     # ------------------------------------------------------------------ planned contract for every watchlist stock (before entry)
@@ -117,11 +117,12 @@ class Engine:
     def save(self, force=False):
         if not force and (not self.autosave or time.time() - self._dirty > 2): return
         with self.lock:
-            (self.dir / f"calls_{self.day}.json").write_text(json.dumps({"calls": self.calls}, default=str))
+            p = self.dir / f"calls_{self.day}.json"; p.write_text(json.dumps({"calls": self.calls}, default=str))
+        self.on_file(p)
 
     def archive(self, c):
         f = self.dir / "history.json"; h = json.loads(f.read_text()) if f.exists() else []
-        h = [x for x in h if x["id"] != c["id"]] + [self.summary(c)]; f.write_text(json.dumps(h))
+        h = [x for x in h if x["id"] != c["id"]] + [self.summary(c)]; f.write_text(json.dumps(h)); self.on_file(f)
 
     def summary(self, c):
         e = c["entry"] or {}
