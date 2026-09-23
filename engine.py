@@ -28,7 +28,7 @@ class Engine:
         g = lambda k, d: type(d)(cfg.get(k, d))
         self.risk_limit = g("RISK_PER_TRADE", 2500.0); self.max_lots = g("MAX_LOTS", 1); self.min_score = g("MIN_SCORE", 60.0)
         self.top = g("TOP_PER_SIDE", 10); self.tdelta = g("TARGET_DELTA", 0.45); self.max_spread = g("MAX_SPREAD_PCT", 3.0)
-        self.min_opt_lots = g("MIN_OPTION_VOLUME_LOTS", 20.0); self.vol_pace = g("VOLUME_PACE", 1.0); self.min_dte = g("MIN_DTE", 3)
+        self.min_delta = g("MIN_DELTA", 0.22); self.min_opt_lots = g("MIN_OPTION_VOLUME_LOTS", 20.0); self.vol_pace = g("VOLUME_PACE", 1.0); self.min_dte = g("MIN_DTE", 3)
         self.index_filter = cfg.get("INDEX_FILTER", "1") == "1"; self.max_active = g("MAX_ACTIVE", 4)
         self.bar_s = g("BAR_SECONDS", 300); self.ignore_hours = cfg.get("IGNORE_MARKET_HOURS", "0") == "1"
         self.t_entry, self.t_cut, self.t_sq = hm(cfg.get("ENTRY_START", "09:25")), hm(cfg.get("NO_NEW_ENTRY", "14:30")), hm(cfg.get("SQUARE_OFF", "15:15"))
@@ -248,7 +248,10 @@ class Engine:
         exps = [e for e in exps if (e - now.date()).days >= self.min_dte] or exps
         if not exps: return None, "no option contracts listed"
         ex = exps[0]; pool = [x for x in cons if (x["expiry"] if isinstance(x["expiry"], date) else date.fromisoformat(str(x["expiry"]))) == ex]
-        pool = sorted(pool, key=lambda x: abs(x["strike"] - spot))[:5]
+        near = sorted(pool, key=lambda x: abs(x["strike"] - spot))[:5]
+        g = 1 if c["side"] == "CE" else -1                      # two cheaper strikes further out, in case risk does not fit
+        far = sorted([x for x in pool if g * (x["strike"] - spot) > 0 and x not in near], key=lambda x: abs(x["strike"] - spot))[:2]
+        pool = near + far
         try: oq = self.broker.option_quotes([x["token"] for x in pool])
         except Exception as e: return None, f"option quote error: {e}"
         T = S.years_to(ex, now); rej = []; cands = []
@@ -264,7 +267,7 @@ class Engine:
             if not fresh: rej.append(f"{x['strike']:g}: quote {age:.0f}s old"); continue
             iv = S.implied_vol(mid, spot, x["strike"], T, .065, c["side"]) or max(.15, c["f"]["hv"] * 1.2)
             delta = S.bs(spot, x["strike"], T, .065, iv, c["side"])[1]
-            if abs(delta) < 0.25: rej.append(f"{x['strike']:g}: delta {delta:.2f} too far OTM"); continue
+            if abs(delta) < self.min_delta: rej.append(f"{x['strike']:g}: delta {delta:.2f} too far OTM"); continue
             Tl = max(T - 2 / (365 * 24), 1e-4)
             est_sl = S.bs(c["sl"], x["strike"], Tl, .065, iv, c["side"])[0]
             est_t = [S.bs(t, x["strike"], Tl, .065, iv, c["side"])[0] for t in S.targets(spot, c["sl"], c["side"])[0]]
