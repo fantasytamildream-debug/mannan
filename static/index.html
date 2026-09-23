@@ -126,6 +126,24 @@ tr.wl td:first-child{box-shadow:inset 3px 0 var(--amber)}
 .rkrow small{display:block;color:var(--mute);font-size:12.5px}
 .rkrow .lt{font:700 16px var(--fc)}
 @media (max-width:640px){.rkrow{grid-template-columns:34px 1fr;row-gap:2px}.rkrow .lt,.rkrow .cv{grid-column:2}}
+
+.light{display:flex;flex-wrap:wrap;gap:2px 14px;align-items:baseline;margin:10px 16px 6px;padding:10px 14px;border-radius:5px;border:1px solid var(--line)}
+.light b{font:700 17px var(--fc)}.light small{color:var(--mute)}
+.light.g{background:color-mix(in srgb,var(--ok) 14%,transparent);border-color:var(--ok)}
+.light.y{background:color-mix(in srgb,var(--amber) 14%,transparent);border-color:var(--amber)}
+.light.r{background:color-mix(in srgb,var(--pe) 10%,transparent);border-color:var(--pe)}
+.light.n{background:var(--panel2)}
+.road{display:flex;margin:0 16px 10px;overflow-x:auto}
+.road .st{flex:1;min-width:86px;position:relative;padding-top:20px;text-align:center;font:600 11.5px var(--fc);color:var(--mute)}
+.road .st:before{content:"";position:absolute;top:8px;left:0;right:50%;height:3px;background:var(--line)}
+.road .st:after{content:"";position:absolute;top:8px;left:50%;right:0;height:3px;background:var(--line)}
+.road .st:first-child:before,.road .st:last-child:after{display:none}
+.road .st i{position:absolute;top:2px;left:50%;transform:translateX(-50%);width:15px;height:15px;border-radius:50%;background:var(--panel);border:3px solid var(--line);z-index:1}
+.road .st.ok i{background:var(--ok);border-color:var(--ok)}.road .st.ok{color:var(--ink)}
+.road .st.ok:before{background:var(--ok)}.road .st.ok+.st:before{background:var(--ok)}
+.road .st.cur i{border-color:var(--amber);background:var(--amber);box-shadow:0 0 0 4px color-mix(in srgb,var(--amber) 35%,transparent)}
+.road .st.cur{color:var(--amber)}
+.road.dead{opacity:.45}
 </style></head><body>
 <header class="top">
  <div class="bar1"><div class="brand">KRT <b>Options</b> Terminal</div><span id="feed" class="feed disconnected">Connecting…</span>
@@ -285,6 +303,7 @@ function card(c){const e=c.entry,L=c.levels,k=c.contract,ce=c.side==='CE',live=c
   const ex=c.lots===1?'1 lot: T1 → stop to cost, T2 → stop to T1, T3 exit':c.lots===2?'2 lots: 1 out at T1 (stop to cost), last lot trails to T3':`${c.lots} lots: a third out at each target`;
   return `<article class="card ${ce?'ce':'pe'}"><div class="ch"><div><h2>${esc(k.name)}</h2><div class="sub">${ce?'BUY CALL':'BUY PUT'} · lot ${k.lot} × ${c.lots} · quality ${c.score.toFixed(0)}/100${c.strong?' · 🔥 strong move':''}</div></div>
    <div class="right">${(()=>{const R=rankList(),i=R.findIndex(x=>x.c.id===c.id);if(i<0)return'';const v=R[i].v;return `<span class="pill ${v.lab[1]}" title="${esc(v.why.join('; '))}">${i===0?'🥇 ':''}${v.lab[0]} ${v.s.toFixed(0)}/100</span>`})()}<span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div></div>
+   ${lightBar(c)}${roadmap(c)}
    <div class="big"><div><small>Entry · ${e.t} IST</small><b>₹${f2(e.prem)}${SRC(true)}</b><em>don't buy above ₹${f2(e.chase)}</em></div>
     <div><small>${live?'Now · LTP':'Exit'}</small><b>${live?'₹'+f2(o.ltp!=null?o.ltp:nowPx)+SRC(!!o.ltp):exitEv?'₹'+f2(exitEv.prem)+SRC(true):c.hits.length?'₹'+f2(c.hits[c.hits.length-1].prem)+SRC(true):'–'}</b><em>${live?`<span class="${p.pct>=0?'up':'dn'}">${p.pct>=0?'+':''}${(p.pct||0).toFixed(1)}%</span>${o.bid?` · bid ${f2(o.bid)} / ask ${f2(o.ask)}`:''}`:exitEv?exitEv.t+' IST':''}</em></div>
     <div><small>Net P&amp;L (after costs)</small><b class="${(p.net||0)>=0?'up':'dn'}">${rs(p.net)}</b><em>${live?'on bid '+f2(nowPx)+' · risk was ':'risk was '}${rs(e.risk_lot*c.lots)}</em></div></div>
@@ -298,11 +317,38 @@ function card(c){const e=c.entry,L=c.levels,k=c.contract,ce=c.side==='CE',live=c
 function checksHTML(c){if(!c.checks||!c.checks.length)return'';const g=n=>c.checks.filter(x=>x.group===n).map(x=>`<div class="ck ${x.ok?'':'no'}">${esc(x.name)}<small>${esc(x.detail)}</small></div>`).join('');return `<div class="checks"><h4>Stock checks</h4>${g('stock')}<h4>Option checks</h4>${g('option')}</div>`}
 function mini(c){const ce=c.side==='CE',st=STAT[c.status],d=c.spot?Math.abs(c.trig-c.spot):null;
   return `<article class="card ${ce?'ce':'pe'}"><div class="ch"><div><h2>${c.plan?esc(c.plan.name):c.sym+' '+c.side}</h2><div class="sub">${c.side==='CE'?'BUY CALL':'BUY PUT'} setup · trigger ${f2(c.trig)} · stop ${f2(c.sl)} · spot ${f2(c.spot)} · quality ${c.score.toFixed(0)}/100</div></div><div class="right"><span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div></div>
+   ${lightBar(c)}${c.plan?roadmap(c):''}
    ${['WATCHING','NEAR','BREAKOUT','BLOCKED'].includes(c.status)?track(c)+planBox(c):''}
    <div class="explain"><span class="lab">${TA()?'நிலை':'Status'}</span>${esc(explain(c))}</div>${checksHTML(c)}</article>`}
 function spark(pts,lines){const v=pts.map(p=>+p[1]),all=v.concat(lines),mn=Math.min(...all),mx=Math.max(...all),W=300,H=60,x=i=>i/(v.length-1||1)*W,y=a=>H-4-(a-mn)/((mx-mn)||1)*(H-8);
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${lines.map((l,i)=>`<line x1="0" x2="${W}" y1="${y(l)}" y2="${y(l)}" stroke="${i===0&&lines.length>2?'var(--pe)':i===1||lines.length===1?'var(--mute)':'var(--ok)'}" stroke-dasharray="3 3" stroke-width="1"/>`).join('')}<polyline fill="none" stroke="var(--amber)" stroke-width="2" points="${v.map((a,i)=>x(i)+','+y(a)).join(' ')}"/></svg>`}
 
+
+
+/* ---------------- traffic light + road map ---------------- */
+function signal(c){
+  const en=c.entry,h=c.hits.length;
+  if(c.status==='ACTIVE')return h>=3?['g','🟢',TA()?'T3 அடைந்தது':'T3 done']
+    :h?['g','🟢',(TA()?c.hits[h-1].name+' அடைந்தது · SL இப்போது ':c.hits[h-1].name+' done · stop now ')+f2(c.stop)]
+    :['g','🟢',(TA()?'வாங்கியாச்சு · T1 ':'Bought · hold for T1 ')+f2(c.levels.t[0])];
+  if(c.status==='BREAKOUT')return['y','🟡',TA()?'Trigger தாண்டியது · candle close வரை வாங்க வேண்டாம்':'Trigger crossed · do NOT buy until the 5-min candle closes'];
+  if(c.status==='NEAR')return['y','🟡',TA()?'Trigger அருகில் · தயாராக இருங்கள், இன்னும் வாங்க வேண்டாம்':'Close to trigger · get ready, do not buy yet'];
+  if(c.status==='WATCHING')return['r','🔴',TA()?'இப்போது trade இல்லை':'No trade yet · just watching'];
+  if(c.status==='BLOCKED')return['r','⛔',TA()?'Trigger தாண்டியும் எடுக்கவில்லை':'Trigger hit but the call was NOT taken'];
+  if(c.status==='INVALID'||c.status==='EXPIRED')return['n','⚫',TA()?'இன்றைக்கு முடிந்தது':'Finished for today'];
+  if(c.status==='CLOSED')return[(c.pnl&&c.pnl.net>=0)?'g':'r',(c.pnl&&c.pnl.net>=0)?'✅':'❌',c.reason+' · '+rs(c.pnl&&c.pnl.net)];
+  return['n','⚪',c.status]}
+function roadmap(c){const done=new Set(c.hits.map(x=>x.name)),act=c.status==='ACTIVE',closed=c.status==='CLOSED';
+  const dead=['INVALID','EXPIRED'].includes(c.status);
+  const steps=[
+   {k:'Watch',t:TA()?'கவனி':'Watch',ok:true,cur:c.status==='WATCHING'},
+   {k:'Trigger',t:(TA()?'Trigger ':'Trigger ')+f2(c.trig),ok:act||closed||c.status==='BREAKOUT'||c.status==='BLOCKED',cur:['NEAR','BREAKOUT'].includes(c.status)},
+   {k:'Buy',t:act||closed?(TA()?'வாங்கியது ₹':'Bought ₹')+f2(c.entry.prem)+' · '+c.entry.t:(TA()?'வாங்க':'Buy'),ok:act||closed,cur:act&&!c.hits.length},
+   ...[0,1,2].map(i=>{const hh=(c.hits||[]).find(x=>x.name==='T'+(i+1));
+     return {k:'T'+(i+1),t:'T'+(i+1)+' '+f2(act||closed?c.levels.t[i]:(c.plan?c.plan.spot_t[i]:0))+(hh?' ✓ '+hh.t:''),ok:!!hh,cur:act&&c.hits.length===i}})];
+  return `<div class="road ${dead?'dead':''}">${steps.map(s=>`<div class="st ${s.ok?'ok':''} ${s.cur?'cur':''}"><i></i><span>${esc(s.t)}</span></div>`).join('')}</div>`}
+function lightBar(c){const [cls,ico,txt]=signal(c);
+  return `<div class="light ${cls}"><b>${ico} ${esc(txt)}</b>${c.status==='ACTIVE'?`<small>${TA()?'SL':'Stop'} ${f2(c.stop)} · ${TA()?'15:15-க்கு exit':'exit by 15:15'}</small>`:c.status==='NEAR'||c.status==='BREAKOUT'?`<small>${TA()?'5-நிமிட candle close ஆனதும் இங்கே 🟢 வரும்':'When the 5-min candle closes beyond it, this turns 🟢 and the strike appears'}</small>`:''}</div>`}
 
 /* ---------------- planned contract + position track ---------------- */
 function track(c){const ce=c.side==='CE',act=!!c.entry,L=c.levels;
@@ -321,7 +367,7 @@ function planBox(c){const p=c.plan;if(!p)return `<div class="plan"><div class="f
    <tr><td><b>Entry</b> <span class="note">5-min close ${ce?'above':'below'}</span></td><td>${f2(c.trig)}</td><td>${f2(p.est_entry)}${SRC(false)}</td></tr>
    <tr><td class="dn"><b>Stop loss</b></td><td>${f2(c.sl)}</td><td>${f2(p.est_sl)}${SRC(false)}</td></tr>
    ${p.spot_t.map((t,i)=>`<tr><td class="up"><b>T${i+1}</b></td><td>${f2(t)}</td><td>${f2(p.est_t[i])}${SRC(false)}</td></tr>`).join('')}</tbody></table>
-   <div class="foot">Risk ≈ ${rs(p.risk_lot)} per lot incl. costs${p.risk_lot>ST.cfg.risk?` <b class="dn">(over the ₹${Number(ST.cfg.risk).toLocaleString('en-IN')} limit: would be skipped unless a cheaper strike fits)</b>`:''}. Targets move with the real entry price; the final strike is re-checked for spread, volume and risk at the candle close.${p.at?' Quote '+p.at+' IST.':''}</div></div>`}
+   <div class="foot">Risk ≈ ${rs(p.risk_lot)} per lot incl. costs${p.risk_lot>ST.cfg.risk?` <b class="dn">(over the ₹${Number(ST.cfg.risk).toLocaleString('en-IN')} limit: would be skipped unless a cheaper strike fits)</b>`:''}. Targets move with the real entry price; the final strike is re-checked for spread, volume and risk at the candle close.${p.live_iv?` Option ₹ estimates are re-priced from the live quote (IV ${(p.iv*100).toFixed(0)}%).`:' Option ₹ estimates use the stock\'s own volatility until a live quote arrives, so they can be well off.'}${p.at?' Quote '+p.at+' IST.':''}</div></div>`}
 
 /* ---------------- near trigger / jackpot ---------------- */
 function renderNear(){const L=ST.calls.filter(c=>['NEAR','BREAKOUT','WATCHING','BLOCKED'].includes(c.status)&&c.spot).map(c=>({c,d:(c.side==='CE'?c.trig-c.spot:c.spot-c.trig)/c.planR})).sort((a,b)=>a.d-b.d);
