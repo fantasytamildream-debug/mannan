@@ -144,6 +144,8 @@ tr.wl td:first-child{box-shadow:inset 3px 0 var(--amber)}
 .road .st.cur i{border-color:var(--amber);background:var(--amber);box-shadow:0 0 0 4px color-mix(in srgb,var(--amber) 35%,transparent)}
 .road .st.cur{color:var(--amber)}
 .road.dead{opacity:.45}
+.gate{padding:8px 12px;border-top:1px solid var(--line);font-size:13.5px;background:color-mix(in srgb,var(--pe) 7%,transparent)}
+.gate.on{background:color-mix(in srgb,var(--amber) 12%,transparent)}
 </style></head><body>
 <header class="top">
  <div class="bar1"><div class="brand">KRT <b>Options</b> Terminal</div><span id="feed" class="feed disconnected">Connecting…</span>
@@ -363,8 +365,10 @@ function planBox(c){const p=c.plan;if(!p)return `<div class="plan"><div class="f
   const liveP=p.ltp!=null;const ce=c.side==='CE';
   return `<div class="plan"><div class="ph"><span class="note">${TA()?'Trigger வந்தால் வாங்க திட்டமிட்ட option':'Planned option if the trigger confirms'}</span><b class="k">${esc(p.name)}</b><span class="note">lot ${p.lot}</span>
    <span>Now ${liveP?'₹'+f2(p.ltp)+SRC(true)+(p.bid?` <span class="note">bid ${f2(p.bid)} / ask ${f2(p.ask)}</span>`:''):'<span class="note">no live quote yet</span>'}</span></div>
-   <table><thead><tr><th></th><th>Spot level</th><th>Option ₹ (est.)</th></tr></thead><tbody>
-   <tr><td><b>Entry</b> <span class="note">5-min close ${ce?'above':'below'}</span></td><td>${f2(c.trig)}</td><td>${f2(p.est_entry)}${SRC(false)}</td></tr>
+   ${(()=>{const beyond=c.spot!=null&&(ce?c.spot>c.trig:c.spot<c.trig);
+     return `<div class="gate ${beyond?'on':''}">${TA()?'Entry-ஐ முடிவு செய்வது <b>stock விலை</b>, option விலை அல்ல.':'The <b>stock price</b> decides the entry, not the option price.'} ${TA()?'Stock இப்போது':'Stock now'} <b>${f2(c.spot)}</b> · ${TA()?(ce?'தேவை: 5-நிமிட close':'தேவை: 5-நிமிட close')+' '+(ce?'மேல்':'கீழ்')+' '+f2(c.trig):'needs a 5-min candle to close '+(ce?'above':'below')+' '+f2(c.trig)} — ${beyond?(TA()?'<b>ஏற்கனவே அந்த பக்கம்</b>':'<b>already beyond it</b>')+(c.status==='BLOCKED'?(TA()?', ஆனால் checks fail':', but a check failed'):(TA()?', candle close-க்காக காத்திருக்கிறது':', waiting for the candle close')):(TA()?'இன்னும் இல்லை':'not yet')}</div>`})()}
+   <table><thead><tr><th></th><th>Spot level</th><th>Option ₹ (est.) at that level</th></tr></thead><tbody>
+   <tr><td><b>Entry</b> <span class="note">when a 5-min candle closes ${ce?'above':'below'} this</span></td><td>${f2(c.trig)}</td><td>${f2(p.est_entry)}${SRC(false)}</td></tr>
    <tr><td class="dn"><b>Stop loss</b></td><td>${f2(c.sl)}</td><td>${f2(p.est_sl)}${SRC(false)}</td></tr>
    ${p.spot_t.map((t,i)=>`<tr><td class="up"><b>T${i+1}</b></td><td>${f2(t)}</td><td>${f2(p.est_t[i])}${SRC(false)}</td></tr>`).join('')}</tbody></table>
    <div class="foot">Risk ≈ ${rs(p.risk_lot)} per lot incl. costs${p.risk_lot>ST.cfg.risk?` <b class="dn">(over the ₹${Number(ST.cfg.risk).toLocaleString('en-IN')} limit: would be skipped unless a cheaper strike fits)</b>`:''}. Targets move with the real entry price; the final strike is re-checked for spread, volume and risk at the candle close.${p.live_iv?` Option ₹ estimates are re-priced from the live quote (IV ${(p.iv*100).toFixed(0)}%).`:' Option ₹ estimates use the stock\'s own volatility until a live quote arrives, so they can be well off.'}${p.at?' Quote '+p.at+' IST.':''}</div></div>`}
@@ -373,11 +377,11 @@ function planBox(c){const p=c.plan;if(!p)return `<div class="plan"><div class="f
 function renderNear(){const L=ST.calls.filter(c=>['NEAR','BREAKOUT','WATCHING','BLOCKED'].includes(c.status)&&c.spot).map(c=>({c,d:(c.side==='CE'?c.trig-c.spot:c.spot-c.trig)/c.planR})).sort((a,b)=>a.d-b.d);
   $('#nearlist').innerHTML=L.length?L.map(({c,d})=>{const st=STAT[c.status],pct=Math.max(0,Math.min(100,(1-Math.max(0,d)/3)*100));return `<div class="row"><div><span class="s ${c.side.toLowerCase()}">${c.plan?esc(c.plan.name.split(' ').slice(0,3).join(' ')):c.sym+' '+c.side}</span><div class="note">quality ${c.score.toFixed(0)}${c.plan&&c.plan.ltp!=null?' · option ₹'+f2(c.plan.ltp):''}${c.plan?' · SL '+f2(c.sl)+' · T1 '+f2(c.plan.spot_t[0]):''}</div></div><div><span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div><div class="num">spot ${f2(c.spot)}<br><span class="note">trigger ${f2(c.trig)}</span><div class="meter"><i style="width:${pct}%"></i></div></div><div class="why">${esc(explain(c))}</div></div>`}).join(''):'<div class="empty">No live prices yet. The list fills once the market opens.</div>'}
 function renderJack(){const ORD={ACTIVE:0,CLOSED:1,BREAKOUT:2,NEAR:3,BLOCKED:4,WATCHING:5,INVALID:6,EXPIRED:7};const L=ST.calls.filter(c=>c.parts.coil>=7.5).sort((a,b)=>b.strong-a.strong||ORD[a.status]-ORD[b.status]||b.score-a.score);
-  $('#jackgrid').innerHTML=L.length?L.map(c=>{const stage=c.status==='CLOSED'?(c.hits.length?'Target':'SL'):c.status==='ACTIVE'?'Triggered':c.strong?'Confirmed':['INVALID','EXPIRED'].includes(c.status)?'Expired':'Watching';
-   const flow=['Watching','Confirmed','Triggered','Target','SL','Expired'].map(s=>`<span class="${s===stage?'on':''}">${s}</span>`).join('');
+  $('#jackgrid').innerHTML=L.length?L.map(c=>{const stage=c.status==='CLOSED'?(c.hits.length?'Target':'SL'):c.status==='ACTIVE'?'Triggered':c.status==='BLOCKED'?'Not taken':['INVALID','EXPIRED'].includes(c.status)?'Over':c.strong?'Confirmed':'Watching';
+   const flow=['Watching','Confirmed','Triggered','Target','SL','Not taken','Over'].map(s=>`<span class="${s===stage?'on':''}">${s}</span>`).join('');
    const ck=(ok,t)=>`<div class="ck ${ok?'':'no'}">${t}</div>`,pace=(c.checks||[]).find(x=>x.name.startsWith('Volume'));
    if(c.entry)return card(c).replace('<div class="ladder">',`<div class="pad" style="padding-bottom:0"><div class="flow">${flow}</div></div><div class="ladder">`);
-   return `<article class="card ${c.side.toLowerCase()}"><div class="ch"><div><h2>${c.strong?'🔥 ':''}${c.plan?esc(c.plan.name):c.sym+' '+c.side}</h2><div class="sub">${c.side==='CE'?'BUY CALL':'BUY PUT'} setup · trigger ${f2(c.trig)} · quality ${c.score.toFixed(0)}/100</div></div></div>${['WATCHING','NEAR','BREAKOUT','BLOCKED'].includes(c.status)?track(c)+planBox(c):''}<div class="pad" style="padding-top:0"><div class="flow">${flow}</div>
+   return `<article class="card ${c.side.toLowerCase()}"><div class="ch"><div><h2>${c.strong?'🔥 ':''}${c.plan?esc(c.plan.name):c.sym+' '+c.side}</h2><div class="sub">${c.side==='CE'?'BUY CALL':'BUY PUT'} setup · trigger ${f2(c.trig)} · quality ${c.score.toFixed(0)}/100</div></div></div>${lightBar(c)}${c.plan?roadmap(c):''}${['WATCHING','NEAR','BREAKOUT','BLOCKED'].includes(c.status)?track(c)+planBox(c):''}<div class="pad" style="padding-top:0"><div class="flow">${flow}</div>
     <div class="jc">${ck(true,'Tight 3-day coil')}${ck(pace&&parseFloat(pace.detail)>=1.5,'Volume ≥1.5× pace'+(pace?' ('+pace.detail.split(' ')[0]+')':''))}${ck(c.orb_break,'First-5-min range break')}${ck(ST.nifty&&(c.side==='CE'?ST.nifty.chg>0:ST.nifty.chg<0),'NIFTY same direction')}${ck(!(c.checks||[]).some(x=>x.name==='Room to T1'&&!x.ok),'Room to T1')}</div>
     <p class="note" style="margin:8px 0 0">${esc(explain(c))}</p></div></article>`}).join(''):'<div class="empty">No coiled setups in today\'s watchlist.</div>'}
 
