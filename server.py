@@ -22,7 +22,8 @@ KEYS = ("BROKER", "ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_MPIN", "ANGEL_TOT
         "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_TOPIC_THREAD_ID", "APP_PASSWORD", "PORT", "DATA_DIR", "DEMO", "DEMO_VOL",
         "QUOTE_INTERVAL_SECONDS", "RISK_PER_TRADE", "MAX_LOTS", "MIN_SCORE", "TOP_PER_SIDE", "TARGET_DELTA", "MAX_SPREAD_PCT",
         "MIN_OPTION_VOLUME_LOTS", "VOLUME_PACE", "MIN_DTE", "INDEX_FILTER", "MAX_ACTIVE", "BAR_SECONDS", "IGNORE_MARKET_HOURS",
-        "ENTRY_START", "NO_NEW_ENTRY", "SQUARE_OFF", "REPLAY", "MIN_DELTA", "ANGEL_RATE_GAP")
+        "ENTRY_START", "NO_NEW_ENTRY", "SQUARE_OFF", "REPLAY", "MIN_DELTA", "ANGEL_RATE_GAP",
+        "GITHUB_REPO", "GITHUB_TOKEN", "GITHUB_BRANCH", "GITHUB_DIR")
 
 def load_cfg():
     cfg = {"PORT": "8765", "QUOTE_INTERVAL_SECONDS": "6"}
@@ -59,6 +60,64 @@ def fetch_eod(as_of, symbols, cache):
         d += timedelta(days=1)
     return rows
 
+
+# ------------------------------------------------------------------ free storage: keep call records in the GitHub repo
+class GitStore:
+    """Render's free plan has no disk, so today's calls would die on every restart.
+    With a GitHub token the server saves every call file back into the repo and reloads it on start."""
+    def __init__(self, cfg, cache):
+        self.repo, self.tok = cfg.get("GITHUB_REPO", ""), cfg.get("GITHUB_TOKEN", "")
+        self.branch = cfg.get("GITHUB_BRANCH", "main"); self.dir = cfg.get("GITHUB_DIR", "records")
+        self.cache, self.on, self.sha, self.q, self.last = Path(cache), bool(self.repo and self.tok), {}, {}, {}
+        self.lock = threading.Lock()
+    def _h(self): return {"Authorization": "Bearer " + self.tok, "Accept": "application/vnd.github+json",
+                          "User-Agent": "krt-terminal", "Content-Type": "application/json"}
+    def _url(self, name=""): return f"https://api.github.com/repos/{self.repo}/contents/{self.dir}" + (f"/{name}" if name else "")
+    def restore(self):
+        if not self.on: return "off"
+        try: items = json.loads(B.http(self._url() + f"?ref={self.branch}", headers=self._h(), timeout=20))
+        except urllib.error.HTTPError as e:
+            if e.code == 404: return "empty (nothing saved yet)"
+            return f"restore failed: HTTP {e.code}"
+        except Exception as e: return f"restore failed: {e}"
+        n = 0
+        for it in items if isinstance(items, list) else []:
+            if not it["name"].endswith(".json"): continue
+            self.sha[it["name"]] = it["sha"]
+            try:
+                raw = B.http(it["download_url"], headers={"User-Agent": "krt-terminal"}, timeout=20)
+                (self.cache / it["name"]).write_bytes(raw); n += 1
+            except Exception as e: log("restore", it["name"], e)
+        return f"{n} files restored from GitHub"
+    def queue(self, path):
+        if not self.on: return
+        with self.lock: self.q[Path(path).name] = time.time()
+    def _push(self, name):
+        p = self.cache / name
+        if not p.exists(): return
+        body = {"message": f"calls {name}", "content": base64.b64encode(p.read_bytes()).decode(), "branch": self.branch}
+        if self.sha.get(name): body["sha"] = self.sha[name]
+        try:
+            r = json.loads(B.http(self._url(name), body, self._h(), timeout=25, method="PUT"))
+            self.sha[name] = r["content"]["sha"]
+        except urllib.error.HTTPError as e:
+            if e.code == 409 or e.code == 422:                     # stale sha: look it up and retry once
+                try:
+                    cur = json.loads(B.http(self._url(name) + f"?ref={self.branch}", headers=self._h(), timeout=20))
+                    self.sha[name] = cur["sha"]; body["sha"] = cur["sha"]
+                    r = json.loads(B.http(self._url(name), body, self._h(), timeout=25, method="PUT")); self.sha[name] = r["content"]["sha"]
+                except Exception as x: log("GitHub save failed", name, x)
+            else: log("GitHub save failed", name, e.code, e.read()[:200])
+        except Exception as e: log("GitHub save failed", name, e)
+    def loop(self):
+        while True:
+            time.sleep(20)
+            with self.lock: due = [n for n, t in self.q.items() if time.time() - self.last.get(n, 0) > 60]
+            for n in due:
+                self.last[n] = time.time()
+                with self.lock: self.q.pop(n, None)
+                self._push(n)
+
 # ------------------------------------------------------------------ Telegram
 class Telegram:
     def __init__(self, cfg):
@@ -86,7 +145,7 @@ def call_text(c):
             f"Risk ≈ ₹{e['risk_lot'] * c['lots']:,.0f} incl. costs · score {c['score']:.0f}/100 (quality, not win chance)\nNot investment advice.")
 
 # ------------------------------------------------------------------ HTTP
-BOOT = {"status": "starting", "eng": None, "statics": {}}
+BOOT = {"status": "starting", "eng": None, "statics": {}, "storage": "temporary"}
 
 def make_handler(cfg, _eng=None, _statics=None):
     class H(BaseHTTPRequestHandler):
@@ -112,7 +171,8 @@ def make_handler(cfg, _eng=None, _statics=None):
             if eng is None:
                 if u.path == "/api/state": return self.send(200, {"starting": True, "status": BOOT["status"], "now": now.isoformat()})
                 return self.send(503, {"error": "starting", "status": BOOT["status"]})
-            if u.path == "/api/state": return self.send(200, eng.snapshot(now))
+            if u.path == "/api/state":
+                st = eng.snapshot(now); st["storage"] = BOOT.get("storage"); st["storage_path"] = BOOT.get("storage_path"); return self.send(200, st)
             if u.path == "/api/history": return self.send(200, eng.history())
             if u.path == "/api/levels": return self.send(200, statics["levels"])
             if u.path == "/api/backtest": return self.send(200, statics["backtest"])
@@ -140,6 +200,18 @@ def main():
     BOOT["status"] = "loading market data"
     data = json.loads((ROOT / "data" / "market_data.json").read_text()); symbols = set(data["lots"]) - set(data["indices"])
     cache = Path(cfg.get("DATA_DIR") or (ROOT / "cache")); cache.mkdir(parents=True, exist_ok=True)
+    # Is this folder a real disk that survives restarts, or throwaway container space?
+    BOOT["storage"] = "persistent" if cfg.get("DATA_DIR") and not str(cache).startswith(str(ROOT)) else "temporary"
+    BOOT["storage_path"] = str(cache)
+    store = GitStore(cfg, cache)
+    if store.on:
+        BOOT["status"] = "restoring saved calls from GitHub"; msg = store.restore(); log("GitHub storage:", msg)
+        BOOT["storage"] = "github"; BOOT["storage_path"] = f"{store.repo}/{store.dir}"
+        threading.Thread(target=store.loop, daemon=True).start()
+    if BOOT["storage"] == "temporary":
+        log("WARNING: calls and history are stored in", cache, "- they will be LOST on every restart.")
+        log("         Add a Render disk mounted at /var/data and set DATA_DIR=/var/data")
+    else: log("Storage:", cache, "(survives restarts)")
     candles = {s: list(data["candles"][s]) for s in symbols}
     def merge(rows):
         for s, rs in rows.items():
@@ -161,6 +233,7 @@ def main():
             p = c.get("pnl") or {}; tg.send(f"{c['id']}|{kind}|{e['t']}" if kind == "exit" else f"{c['id']}|{kind}",
                     f"{'✅' if kind.startswith('t') else '⛔' if kind in ('sl',) else '🔚'} {c['contract']['name']}\n{e['text']} at {e['t']} IST\nNet so far ≈ ₹{p.get('net', 0):,.0f}")
     eng = Engine(cfg, broker, candles, {s: data["lots"][s] for s in symbols}, cache, notify)
+    eng.on_file = store.queue
     last_lots = {s: data["lots"][s] for s in symbols if s in data["lots"]}
     if hasattr(broker, "lot_of"):                       # real lot sizes from the broker's contract list
         for s in symbols:
