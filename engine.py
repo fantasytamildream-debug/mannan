@@ -69,7 +69,20 @@ class Engine:
         with self.lock:
             for c in todo:
                 p = c.get("plan"); v = oq.get(p["token"]) if p else None
-                if v: p.update(ltp=v.get("ltp"), bid=v.get("bid"), ask=v.get("ask"), at=now.strftime("%H:%M:%S"))
+                if not v: continue
+                p.update(ltp=v.get("ltp"), bid=v.get("bid"), ask=v.get("ask"), at=now.strftime("%H:%M:%S"))
+                # re-price the plan with the volatility the market is actually charging right now
+                spot = (self.q.get(c["sym"]) or {}).get("ltp")
+                mid = (v["bid"] + v["ask"]) / 2 if v.get("bid") and v.get("ask") else v.get("ltp")
+                if not (spot and mid): continue
+                T = S.years_to(date.fromisoformat(p["expiry"]), now)
+                iv = S.implied_vol(mid, spot, p["strike"], T, .065, c["side"])
+                if not iv: continue
+                pr = lambda sp, tt=max(T - 2 / (365 * 24), 1e-4): round(S.bs(sp, p["strike"], tt, .065, iv, c["side"])[0], 2)
+                tg = S.targets(c["trig"], c["sl"], c["side"])[0]
+                e = round(S.bs(c["trig"], p["strike"], T, .065, iv, c["side"])[0], 2); sl = pr(c["sl"])
+                p.update(iv=iv, live_iv=True, est_entry=e, est_sl=sl, est_t=[pr(t) for t in tg],
+                         risk_lot=(e - sl) * p["lot"] + S.friction(e * p["lot"], sl * p["lot"]))
             self._dirty = time.time()
 
     # ------------------------------------------------------------------ helpers
