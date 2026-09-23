@@ -57,7 +57,8 @@ class AngelOne:
         self.mpin, self.secret = cfg.get("ANGEL_MPIN", ""), cfg.get("ANGEL_TOTP_SECRET", "")
         if not all([self.key, self.client, self.mpin, self.secret]) or "YOUR" in self.key:
             raise BrokerError("Add ANGEL_API_KEY, ANGEL_CLIENT_CODE, ANGEL_MPIN, ANGEL_TOTP_SECRET")
-        self.symbols, self.cache, self.jwt, self.gate, self.login_day = symbols, cache, None, RateGate(0.35), None
+        self.symbols, self.cache, self.jwt, self.login_day = symbols, cache, None, None
+        self.gate = RateGate(float(cfg.get("ANGEL_RATE_GAP", 1.1)))
 
     def _h(self):
         h = {"Content-Type": "application/json", "Accept": "application/json", "X-UserType": "USER", "X-SourceID": "WEB",
@@ -78,7 +79,11 @@ class AngelOne:
         if not self.jwt or self.login_day != datetime.now(IST).date(): self.login()
         try: d = json.loads(http(self.BASE + path, body, self._h(), timeout=10))
         except urllib.error.HTTPError as e:
-            if e.code in (401, 403) and retry: self.login(); return self._post(path, body, False)
+            if e.code == 403:                       # Angel sends 403 when too many requests arrive
+                if retry:
+                    log("Angel rate limit, backing off 5s"); time.sleep(5); return self._post(path, body, False)
+                raise BrokerError("Angel rate limit (403). Slowing down; raise QUOTE_INTERVAL_SECONDS if it keeps happening")
+            if e.code == 401 and retry: self.login(); return self._post(path, body, False)
             raise
         if not d.get("status"):
             if retry and str(d.get("errorcode", "")).startswith("AG80"): self.login(); return self._post(path, body, False)
@@ -110,9 +115,10 @@ class AngelOne:
             out += self._post("/rest/secure/angelbroking/market/v1/quote/", {"mode": "FULL", "exchangeTokens": {exch: tokens[i:i+50]}}).get("fetched") or []
         return out
 
-    def quotes(self):
+    def quotes(self, symbols=None):
+        toks = [self.eq[s] for s in (symbols or self.eq) if s in self.eq] + [self.NIFTY_TOKEN]
         q = {}
-        for v in self._quote("NSE", list(self.eq.values()) + [self.NIFTY_TOKEN]):
+        for v in self._quote("NSE", toks):
             s = self.inv.get(str(v.get("symbolToken")))
             if s and v.get("ltp"):
                 q[s] = dict(ltp=float(v["ltp"]), open=v.get("open"), high=v.get("high"), low=v.get("low"), prev_close=v.get("close"),
@@ -167,8 +173,8 @@ class Dhan:
         return f"{len(self.ids)}/{len(self.symbols)} stocks mapped"
     def _q(self, body):
         self.gate.wait(); return json.loads(http(self.BASE + "/marketfeed/quote", body, self.h)).get("data", {})
-    def quotes(self):
-        d = self._q({"NSE_EQ": list(self.ids.values()), "IDX_I": [13]}); q = {}
+    def quotes(self, symbols=None):
+        d = self._q({"NSE_EQ": [self.ids[s] for s in (symbols or self.ids) if s in self.ids], "IDX_I": [13]}); q = {}
         for seg in ("NSE_EQ", "IDX_I"):
             for sid, v in (d.get(seg) or {}).items():
                 s = "NIFTY" if seg == "IDX_I" else self.inv.get(str(sid)); o = v.get("ohlc", {})
@@ -210,7 +216,7 @@ class Demo:
             self.state[s] = dict(ltp=o, open=o, high=o, low=o, prev_close=last, volume=int((f["vavg"] if f else 1e6) * random.uniform(.4, .8)), iv=max(.18, (f["hv"] if f else .2) * 1.2), vavg=(f["vavg"] if f else 1e6))
         return f"simulated {len(self.symbols)} stocks"
     def set_bias(self, bias): self.bias = bias      # {sym: +1/-1} nudges watchlist names toward their trigger
-    def quotes(self):
+    def quotes(self, symbols=None):
         now = datetime.now(IST); out = {}
         for s, st in self.state.items():
             drift = self.bias.get(s, 0) * self.vol * 0.35
