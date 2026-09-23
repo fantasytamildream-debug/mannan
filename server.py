@@ -22,10 +22,10 @@ KEYS = ("BROKER", "ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_MPIN", "ANGEL_TOT
         "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_TOPIC_THREAD_ID", "APP_PASSWORD", "PORT", "DATA_DIR", "DEMO", "DEMO_VOL",
         "QUOTE_INTERVAL_SECONDS", "RISK_PER_TRADE", "MAX_LOTS", "MIN_SCORE", "TOP_PER_SIDE", "TARGET_DELTA", "MAX_SPREAD_PCT",
         "MIN_OPTION_VOLUME_LOTS", "VOLUME_PACE", "MIN_DTE", "INDEX_FILTER", "MAX_ACTIVE", "BAR_SECONDS", "IGNORE_MARKET_HOURS",
-        "ENTRY_START", "NO_NEW_ENTRY", "SQUARE_OFF", "REPLAY", "MIN_DELTA")
+        "ENTRY_START", "NO_NEW_ENTRY", "SQUARE_OFF", "REPLAY", "MIN_DELTA", "ANGEL_RATE_GAP")
 
 def load_cfg():
-    cfg = {"PORT": "8765", "QUOTE_INTERVAL_SECONDS": "5"}
+    cfg = {"PORT": "8765", "QUOTE_INTERVAL_SECONDS": "6"}
     f = ROOT / "config.env"
     if f.exists():
         for line in f.read_text(encoding="utf-8").splitlines():
@@ -183,7 +183,7 @@ def main():
             t0 = time.time(); now = datetime.now(IST)
             try:
                 if eng.market_open(now) or now.hour * 60 + now.minute in range(9 * 60, 15 * 60 + 40) or eng.day is None:
-                    eng.tick(now, broker.quotes())
+                    eng.tick(now, broker.quotes(eng.quote_symbols()))
                 else:
                     with eng.lock:
                         if eng.day != now.date(): eng.new_day(now)
