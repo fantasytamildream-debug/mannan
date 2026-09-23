@@ -17,9 +17,9 @@ class BrokerError(Exception): pass
 
 def log(*a): print(datetime.now(IST).strftime("%H:%M:%S"), *a, flush=True)
 
-def http(url, body=None, headers=None, timeout=10):
+def http(url, body=None, headers=None, timeout=10, method=None):
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(url, data=data, headers=headers or {}, method="POST" if data else "GET")
+    req = urllib.request.Request(url, data=data, headers=headers or {}, method=method or ("POST" if data else "GET"))
     with urllib.request.urlopen(req, timeout=timeout) as r: return r.read()
 
 def parse_ts(v):
