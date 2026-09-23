@@ -292,7 +292,11 @@ function render(){tickHeader();const C=ST.calls,cnt=k=>C.filter(c=>GROUPS[k].inc
   $('#chips').innerHTML=[['active','Active'],['near','Near trigger'],['closed','Closed'],['skip','Not taken / invalid'],['watch','Watching']].map(([k,l])=>`<button class="chip" data-f="${k}" aria-pressed="${U.filter===k}">${l}<i>${cnt(k)}</i></button>`).join('');
   const L=C.filter(c=>GROUPS[U.filter].includes(c.status)).sort((a,b)=>(['active','near'].includes(U.filter)?conviction(b).s-conviction(a).s:0)||(b.entry?.t||'').localeCompare(a.entry?.t||'')||b.score-a.score);
   const alertbar=$('#alertbar');
-  if(ST.feed.health!=='live'&&ST.market_open){alertbar.hidden=false;alertbar.className='warnbar';alertbar.textContent=ST.feed.health==='delayed'?'Prices are delayed. Do not act on calls until the badge shows Live.':'Feed disconnected. Calls are frozen; check the server.'}else alertbar.hidden=true;
+  if(ST.storage==='temporary'){alertbar.hidden=false;alertbar.className='warnbar';
+    alertbar.innerHTML=`<b>⚠️ Calls are not being saved.</b> They live in <code>${esc(ST.storage_path||'')}</code>, which Render wipes on every restart — that is why finished calls disappear. <b>Free fix:</b> add <code>GITHUB_REPO</code> and <code>GITHUB_TOKEN</code> in Render → Environment, and every call file is stored in your own repo. <b>Paid fix:</b> a Render disk at <code>/var/data</code> with <code>DATA_DIR=/var/data</code>.`}
+  else if(ST.storage==='github'&&ST.market_open&&ST.feed.health==='live'&&!store.get('krt_gh_seen',0)){alertbar.hidden=false;alertbar.className='warnbar am';
+    alertbar.innerHTML=`<b>✅ Calls are saved to GitHub</b> (<code>${esc(ST.storage_path||'')}</code>), so they survive restarts. <button class="btn sm" id="gh-ok">Got it</button>`}
+  else if(ST.feed.health!=='live'&&ST.market_open){alertbar.hidden=false;alertbar.className='warnbar';alertbar.textContent=ST.feed.health==='delayed'?'Prices are delayed. Do not act on calls until the badge shows Live.':'Feed disconnected. Calls are frozen; check the server.'}else alertbar.hidden=true;
   renderRank();
   if(!L.length){$('#callgrid').innerHTML=U.filter==='active'?`<div class="empty"><b>${TA()?'இப்போது trade இல்லை':'No trade right now'}</b>${TA()?'எல்லா confirmations-ம் pass ஆன setup வந்தால் இங்கே தோன்றும்.':'A call appears here only when a 5-minute candle closes beyond a trigger and every check passes. Waiting is part of the plan.'}${cnt('near')?`<br><br><button class="btn" data-f="near">${cnt('near')} near trigger →</button>`:''}</div>`:'<div class="empty">Nothing here yet.</div>'}
   else $('#callgrid').innerHTML=`<div class="grid">${L.map(c=>c.entry?card(c):mini(c)).join('')}</div>`;
@@ -469,6 +473,7 @@ document.addEventListener('click',e=>{const t=e.target.closest('nav.tabs button'
   const f=e.target.closest('[data-f]');if(f){U.filter=f.dataset.f;saveU();if($('#calls').hidden)go('calls');return render()}
   const p=e.target.closest('[data-p]');if(p){U.pf=p.dataset.p;saveU();return renderPerf()}
   const gi=e.target.closest('[data-goid]');if(gi){const el=document.querySelector(`[data-copy="${gi.dataset.goid}"]`);if(el)el.closest('.card').scrollIntoView({behavior:'smooth',block:'center'});return}
+  if(e.target.id==='gh-ok'){store.set('krt_gh_seen',1);$('#alertbar').hidden=true;return}
   const dd=e.target.closest('[data-day]');if(dd){e.preventDefault();DSEL=dd.dataset.day;return go('hist')}
   const pk=e.target.closest('[data-pk]');if(pk)return pkDrill(pk.dataset.pk);
   if(e.target.closest('[data-pkclose]')){$('#pkdrill').innerHTML='';return}
