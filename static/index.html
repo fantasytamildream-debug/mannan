@@ -117,6 +117,15 @@ tr.clk{cursor:pointer}tr.clk:hover td{background:var(--panel2)}
 .drill{margin-top:12px;border-top:1px solid var(--line);padding-top:12px}
 .lvhelp{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px 18px;font-size:13.5px;margin-top:8px}.lvhelp b{color:var(--ink)}
 tr.wl td:first-child{box-shadow:inset 3px 0 var(--amber)}
+
+.rk2{display:flex;flex-direction:column;gap:2px}
+.rkrow{display:grid;grid-template-columns:44px minmax(0,2fr) minmax(0,1fr) minmax(0,1.4fr);gap:10px;align-items:center;padding:9px 6px;border-top:1px solid var(--line);cursor:pointer;border-left:4px solid var(--c)}
+.rkrow.ce{--c:var(--ce)}.rkrow.pe{--c:var(--pe)}.rkrow:hover{background:var(--panel2)}
+.rkrow .md{font:700 20px var(--fc);text-align:center}
+.rkrow .nm b{display:block;font:700 16px var(--fc);color:var(--c)}
+.rkrow small{display:block;color:var(--mute);font-size:12.5px}
+.rkrow .lt{font:700 16px var(--fc)}
+@media (max-width:640px){.rkrow{grid-template-columns:34px 1fr;row-gap:2px}.rkrow .lt,.rkrow .cv{grid-column:2}}
 </style></head><body>
 <header class="top">
  <div class="bar1"><div class="brand">KRT <b>Options</b> Terminal</div><span id="feed" class="feed disconnected">Connecting…</span>
@@ -126,7 +135,7 @@ tr.wl td:first-child{box-shadow:inset 3px 0 var(--amber)}
 </header>
 <div id="alertbar" class="warnbar" hidden></div>
 <main>
- <section id="calls"><div class="strip" id="strip"></div><div class="chips" id="chips"></div><div id="callgrid"></div></section>
+ <section id="calls"><div class="strip" id="strip"></div><div id="rank"></div><div class="chips" id="chips"></div><div id="callgrid"></div></section>
  <section id="hist" hidden>
   <div class="panel pad"><div class="daynav"><button class="btn" id="d-prev" aria-label="Previous day">◀</button><input type="date" id="d-pick" class="s" aria-label="Pick a date"><button class="btn" id="d-next" aria-label="Next day">▶</button><button class="btn" id="d-today">Today</button><button class="btn" id="d-yest">Yesterday</button><span id="d-src"></span></div></div>
   <div class="strip" id="d-strip"></div><div id="d-body"></div></section>
@@ -218,6 +227,42 @@ function explain(c){const ce=c.side==='CE',f=c.f,fails=(c.checks||[]).filter(x=>
     case'CLOSED':return `${c.reason}. Net ${rs(c.pnl&&c.pnl.net)} after estimated costs and slippage.`;
     case'STALE':return `The server stopped during this day, so the exit was never recorded. P&L shown is at the last price it saw.`}}
 
+
+/* ---------------- how strong is each call right now (ranking, NOT a win chance) ---------------- */
+function ckVal(c,name){const x=(c.checks||[]).find(y=>y.name.startsWith(name));return x?parseFloat(x.detail):null}
+function conviction(c){
+  const q=c.score||0,pace=ckVal(c,'Volume')||0,spread=ckVal(c,'Bid')||null,why=[];
+  let s=Math.min(30,q*0.33); if(q>=75)why.push('high-quality setup ('+q.toFixed(0)+'/100)');
+  if(pace>=1.5){s+=15;why.push('volume '+pace.toFixed(2)+'× normal')}else if(pace>=1){s+=8}
+  if(c.strong){s+=15;why.push('all five jackpot conditions')}
+  if(spread!=null&&spread<=1){s+=10;why.push('tight spread '+spread.toFixed(2)+'%')}else if(spread!=null&&spread<=2)s+=5;
+  if(c.entry&&c.levels&&c.spot!=null){
+    const g=c.side==='CE'?1:-1,R=(c.spot-c.entry.spot)*g/c.levels.R;
+    s+=Math.max(-25,Math.min(20,R*20));
+    if(R>=0.5)why.push('already '+R.toFixed(1)+'R in profit');else if(R<=-0.4)why.push('working against the entry ('+R.toFixed(1)+'R)');
+    if(c.hits.length)why.push(c.hits[c.hits.length-1].name+' done, stop at '+f2(c.stop));
+    if(c.entry.t<'11:00')s+=8;
+  } else if(c.plan){
+    const g=c.side==='CE'?1:-1,d=g*(c.trig-c.spot)/c.planR;
+    s+=Math.max(0,Math.min(15,(1-d)*15)); if(d<=0.2)why.push('sitting at the trigger');
+    if(c.plan.risk_lot>ST.cfg.risk){s-=20;why.push('risk ₹'+Math.round(c.plan.risk_lot).toLocaleString('en-IN')+'/lot is over the limit')}
+  }
+  s=Math.max(0,Math.min(100,s));
+  const lab=s>=72?['Best setup','ok']:s>=58?['Strong','ok']:s>=44?['Average','am']:['Weak · manage tight','bad'];
+  return {s,lab,why}}
+function rankList(){const L=ST.calls.filter(c=>['ACTIVE','BREAKOUT','NEAR'].includes(c.status));
+  return L.map(c=>({c,v:conviction(c)})).sort((a,b)=>b.v.s-a.v.s)}
+function renderRank(){const R=rankList();
+  if(!R.length){$('#rank').innerHTML='';return}
+  const medal=i=>i===0?'🥇':i===1?'🥈':i===2?'🥉':'#'+(i+1);
+  $('#rank').innerHTML=`<div class="panel pad"><h3>${TA()?'இன்றைய calls ranking':'Today\'s calls, strongest first'}</h3>
+   <p class="note">${TA()?'Setup தரம், volume, spread, இப்போதைய நிலை இவற்றை வைத்து வரிசை. இது win chance அல்ல.':'Ranked on setup quality, volume, option spread and how the trade is doing right now. This is a ranking of strength, not a win probability.'}</p>
+   <div class="rk2">${R.map((x,i)=>{const c=x.c,o=c.opt||{},p=c.pnl||{},act=c.status==='ACTIVE';
+     return `<div class="rkrow ${c.side.toLowerCase()}" data-goid="${c.id}"><span class="md">${medal(i)}</span>
+      <div class="nm"><b>${esc((c.contract||c.plan||{}).name||c.sym+' '+c.side)}</b><small>${act?'entry ₹'+f2(c.entry.prem)+' at '+c.entry.t:STAT[c.status][0]+' · trigger '+f2(c.trig)}</small></div>
+      <div class="lt">${act?(o.ltp!=null?'LTP ₹'+f2(o.ltp):'–'):(c.plan&&c.plan.ltp!=null?'LTP ₹'+f2(c.plan.ltp):'–')}<small>${act?`<span class="${(p.net||0)>=0?'up':'dn'}">${rs(p.net)}</span>`:'not bought yet'}</small></div>
+      <div class="cv"><span class="pill ${x.v.lab[1]}">${x.v.lab[0]}</span><div class="meter"><i style="width:${x.v.s}%"></i></div><small>${x.v.s.toFixed(0)}/100${x.v.why.length?' · '+esc(x.v.why[0]):''}</small></div></div>`}).join('')}</div></div>`}
+
 /* ---------------- calls ---------------- */
 const GROUPS={active:['ACTIVE'],near:['NEAR','BREAKOUT'],closed:['CLOSED'],skip:['BLOCKED','INVALID','EXPIRED'],watch:['WATCHING']};
 function render(){tickHeader();const C=ST.calls,cnt=k=>C.filter(c=>GROUPS[k].includes(c.status)).length;
@@ -225,9 +270,10 @@ function render(){tickHeader();const C=ST.calls,cnt=k=>C.filter(c=>GROUPS[k].inc
   const taken=C.filter(c=>c.entry),net=taken.reduce((a,c)=>a+(c.pnl?c.pnl.net:0),0),wins=C.filter(c=>c.status==='CLOSED'&&c.pnl&&c.pnl.net>0).length,loss=C.filter(c=>c.status==='CLOSED'&&c.pnl&&c.pnl.net<=0).length;
   $('#strip').innerHTML=[['Calls today',taken.length],['Active now',cnt('active')],['Closed · won / lost',`${wins} / ${loss}`],['Net today (after costs)',`<span class="${net>=0?'up':'dn'}">${rs(net)}</span>`],['Watching',`${cnt('watch')+cnt('near')} of ${C.length}`]].map(([a,b])=>`<div><small>${a}</small><b>${b}</b></div>`).join('');
   $('#chips').innerHTML=[['active','Active'],['near','Near trigger'],['closed','Closed'],['skip','Not taken / invalid'],['watch','Watching']].map(([k,l])=>`<button class="chip" data-f="${k}" aria-pressed="${U.filter===k}">${l}<i>${cnt(k)}</i></button>`).join('');
-  const L=C.filter(c=>GROUPS[U.filter].includes(c.status)).sort((a,b)=>(b.entry?.t||'').localeCompare(a.entry?.t||'')||b.score-a.score);
+  const L=C.filter(c=>GROUPS[U.filter].includes(c.status)).sort((a,b)=>(['active','near'].includes(U.filter)?conviction(b).s-conviction(a).s:0)||(b.entry?.t||'').localeCompare(a.entry?.t||'')||b.score-a.score);
   const alertbar=$('#alertbar');
   if(ST.feed.health!=='live'&&ST.market_open){alertbar.hidden=false;alertbar.className='warnbar';alertbar.textContent=ST.feed.health==='delayed'?'Prices are delayed. Do not act on calls until the badge shows Live.':'Feed disconnected. Calls are frozen; check the server.'}else alertbar.hidden=true;
+  renderRank();
   if(!L.length){$('#callgrid').innerHTML=U.filter==='active'?`<div class="empty"><b>${TA()?'இப்போது trade இல்லை':'No trade right now'}</b>${TA()?'எல்லா confirmations-ம் pass ஆன setup வந்தால் இங்கே தோன்றும்.':'A call appears here only when a 5-minute candle closes beyond a trigger and every check passes. Waiting is part of the plan.'}${cnt('near')?`<br><br><button class="btn" data-f="near">${cnt('near')} near trigger →</button>`:''}</div>`:'<div class="empty">Nothing here yet.</div>'}
   else $('#callgrid').innerHTML=`<div class="grid">${L.map(c=>c.entry?card(c):mini(c)).join('')}</div>`;
   if(!$('#near').hidden)renderNear();if(!$('#jack').hidden)renderJack();if(!$('#levels').hidden&&!$('#lvq').matches(':focus'))renderLevels()}
@@ -238,10 +284,10 @@ function card(c){const e=c.entry,L=c.levels,k=c.contract,ce=c.side==='CE',live=c
   const tgt=i=>{const h=hits['T'+(i+1)];return lv('t'+(h?' hit':''),'T'+(i+1),L.t[i],h?h.prem:L.est.t[i],!!h,h?'✓ '+h.t:'')};
   const ex=c.lots===1?'1 lot: T1 → stop to cost, T2 → stop to T1, T3 exit':c.lots===2?'2 lots: 1 out at T1 (stop to cost), last lot trails to T3':`${c.lots} lots: a third out at each target`;
   return `<article class="card ${ce?'ce':'pe'}"><div class="ch"><div><h2>${esc(k.name)}</h2><div class="sub">${ce?'BUY CALL':'BUY PUT'} · lot ${k.lot} × ${c.lots} · quality ${c.score.toFixed(0)}/100${c.strong?' · 🔥 strong move':''}</div></div>
-   <div class="right"><span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div></div>
+   <div class="right">${(()=>{const R=rankList(),i=R.findIndex(x=>x.c.id===c.id);if(i<0)return'';const v=R[i].v;return `<span class="pill ${v.lab[1]}" title="${esc(v.why.join('; '))}">${i===0?'🥇 ':''}${v.lab[0]} ${v.s.toFixed(0)}/100</span>`})()}<span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div></div>
    <div class="big"><div><small>Entry · ${e.t} IST</small><b>₹${f2(e.prem)}${SRC(true)}</b><em>don't buy above ₹${f2(e.chase)}</em></div>
-    <div><small>${live?'Now (bid)':'Exit'}</small><b>${live?'₹'+f2(nowPx)+SRC(!!o.ltp):exitEv?'₹'+f2(exitEv.prem)+SRC(true):c.hits.length?'₹'+f2(c.hits[c.hits.length-1].prem)+SRC(true):'–'}</b><em>${live?`<span class="${p.pct>=0?'up':'dn'}">${p.pct>=0?'+':''}${(p.pct||0).toFixed(1)}%</span>`:exitEv?exitEv.t+' IST':''}</em></div>
-    <div><small>Net P&amp;L (after costs)</small><b class="${(p.net||0)>=0?'up':'dn'}">${rs(p.net)}</b><em>risk was ${rs(e.risk_lot*c.lots)}</em></div></div>
+    <div><small>${live?'Now · LTP':'Exit'}</small><b>${live?'₹'+f2(o.ltp!=null?o.ltp:nowPx)+SRC(!!o.ltp):exitEv?'₹'+f2(exitEv.prem)+SRC(true):c.hits.length?'₹'+f2(c.hits[c.hits.length-1].prem)+SRC(true):'–'}</b><em>${live?`<span class="${p.pct>=0?'up':'dn'}">${p.pct>=0?'+':''}${(p.pct||0).toFixed(1)}%</span>${o.bid?` · bid ${f2(o.bid)} / ask ${f2(o.ask)}`:''}`:exitEv?exitEv.t+' IST':''}</em></div>
+    <div><small>Net P&amp;L (after costs)</small><b class="${(p.net||0)>=0?'up':'dn'}">${rs(p.net)}</b><em>${live?'on bid '+f2(nowPx)+' · risk was ':'risk was '}${rs(e.risk_lot*c.lots)}</em></div></div>
    <div class="ladder">${lv('sl'+(slHit?' hitsl':''),c.stop!==L.sl&&live?'Stop (moved)':'Stop loss',live?c.stop:L.sl,live&&c.stop!==L.sl?(Math.abs(c.stop-L.t[0])<1e-6?(hits.T1?hits.T1.prem:L.est.t[0]):e.prem):L.est.sl,false,slHit&&exitEv?'✗ '+exitEv.t:'',live&&c.stop===L.sl)}${lv('en','Entry',e.spot,e.prem,true,e.t)}${tgt(0)}${tgt(1)}${tgt(2)}</div>
    ${live?track(c):''}<div class="rule"><b>Exit rule:</b> ${ex}. Square-off ${ST.cfg.sq}. Levels are on the stock price; option prices at targets are ${SRC(false)} until hit.</div>
    <div class="explain"><span class="lab">${TA()?'ஏன் இந்த call?':'Why this call'}</span>${esc(explain(c))}</div>
@@ -372,6 +418,7 @@ function go(t){$$('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b
 document.addEventListener('click',e=>{const t=e.target.closest('nav.tabs button');if(t)return go(t.dataset.t);
   const f=e.target.closest('[data-f]');if(f){U.filter=f.dataset.f;saveU();if($('#calls').hidden)go('calls');return render()}
   const p=e.target.closest('[data-p]');if(p){U.pf=p.dataset.p;saveU();return renderPerf()}
+  const gi=e.target.closest('[data-goid]');if(gi){const el=document.querySelector(`[data-copy="${gi.dataset.goid}"]`);if(el)el.closest('.card').scrollIntoView({behavior:'smooth',block:'center'});return}
   const dd=e.target.closest('[data-day]');if(dd){e.preventDefault();DSEL=dd.dataset.day;return go('hist')}
   const pk=e.target.closest('[data-pk]');if(pk)return pkDrill(pk.dataset.pk);
   if(e.target.closest('[data-pkclose]')){$('#pkdrill').innerHTML='';return}
