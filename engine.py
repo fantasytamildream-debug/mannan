@@ -339,6 +339,10 @@ class Engine:
         try: self.notify(c, kind, e)
         except Exception as x: print("alert error:", x, flush=True)
 
+    def quote_symbols(self):
+        """Only the stocks on today's watchlist need live prices (plus NIFTY, added by the broker)."""
+        with self.lock: return sorted({c["sym"] for c in self.calls.values()}) or None
+
     def snapshot(self, now):
         with self.lock:
             lp = datetime.fromisoformat(self.feed["last_poll"]) if self.feed.get("last_poll") else None
