@@ -1,0 +1,1 @@
+[{"id": "260924-M&M-PE", "day": "2026-09-24", "sym": "M&M", "side": "PE", "src": "live", "contract": "M&M 3000 PE 29 Sep", "score": 75.6, "strong": false, "entry_time": "09:35:03", "entry": 20.55, "exit_time": "15:15:02", "result": "T1 hit, rest closed by square-off", "hits": ["T1"], "pnl": 1868.33, "lots": 1, "lot": 200}]
