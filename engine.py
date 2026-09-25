@@ -31,7 +31,7 @@ class Engine:
         self.min_delta = g("MIN_DELTA", 0.22); self.min_opt_lots = g("MIN_OPTION_VOLUME_LOTS", 20.0); self.vol_pace = g("VOLUME_PACE", 1.0); self.min_dte = g("MIN_DTE", 3)
         self.index_filter = cfg.get("INDEX_FILTER", "1") == "1"; self.max_active = g("MAX_ACTIVE", 4)
         self.bar_s = g("BAR_SECONDS", 300); self.ignore_hours = cfg.get("IGNORE_MARKET_HOURS", "0") == "1"
-        self.t_entry, self.t_cut, self.t_sq = hm(cfg.get("ENTRY_START", "09:25")), hm(cfg.get("NO_NEW_ENTRY", "14:30")), hm(cfg.get("SQUARE_OFF", "15:15"))
+        self.t_entry, self.t_cut, self.t_sq = hm(cfg.get("ENTRY_START", "09:25")), hm(cfg.get("NO_NEW_ENTRY", "15:00")), hm(cfg.get("SQUARE_OFF", "15:15"))
         self.lock = threading.RLock(); self.day = None; self.calls = {}; self.bars = {}; self.q = {}; self.optq = {}
         self.feed = dict(status="starting", last_poll=None, exch_age=None, error="", broker=getattr(broker, "name", ""))
         self._dirty = 0.0; self.on_file = lambda p: None; self.source = cfg.get("_SOURCE", "live"); self._plan_at = 0.0; self.autosave = self.source == "live"
@@ -168,12 +168,14 @@ class Engine:
             c["spark"] = (c["spark"] + [[closed["start"], round(closed["c"], 2)]])[-80:]
             if c.get("orb") is None and (closed["start"] == "09:15" or self.ignore_hours): c["orb"] = [closed["h"], closed["l"]]
         m = self.mins(now)
+        el = max(15, (m - (9 * 60 + 15))) / 375 if not self.ignore_hours else 0.5
+        c["rvol"] = round((sq.get("volume") or 0) / max(1, c["f"]["vavg"] * el), 2)
         if c["status"] in PRE:
             hi, lo = bar["h"], bar["l"]
             if (lo <= c["sl"]) if ce else (hi >= c["sl"]):
                 c["status"], c["reason"] = "INVALID", f"Stop level {f2(c['sl'])} broke before any entry"; self.ev(c, now, "invalid", c["reason"]); return
             if m >= self.t_cut and not self.ignore_hours:
-                c["status"], c["reason"] = "EXPIRED", f"No confirmed entry by {self.cfg.get('NO_NEW_ENTRY','14:30')}"; self.ev(c, now, "expired", c["reason"]); return
+                c["status"], c["reason"] = "EXPIRED", f"No confirmed entry by {self.cfg.get('NO_NEW_ENTRY','15:00')}"; self.ev(c, now, "expired", c["reason"]); return
             beyond_close = bool(closed) and ((closed["c"] > c["trig"]) if ce else (closed["c"] < c["trig"]))
             if beyond_close:
                 self.on_close(c, closed, sq, now)
@@ -354,7 +356,7 @@ class Engine:
             return dict(now=now.isoformat(), day=str(self.day), feed=dict(self.feed, health=st, poll_age=poll_age), market_open=self.market_open(now),
                         nifty=dict(ltp=ni["ltp"], chg=(ni["ltp"] / ni["prev_close"] - 1) * 100 if ni.get("prev_close") else None) if ni else None,
                         cfg=dict(risk=self.risk_limit, max_lots=self.max_lots, min_score=self.min_score, spread=self.max_spread, bar=self.bar_s // 60,
-                                 entry=self.cfg.get("ENTRY_START", "09:25"), cut=self.cfg.get("NO_NEW_ENTRY", "14:30"), sq=self.cfg.get("SQUARE_OFF", "15:15"),
+                                 entry=self.cfg.get("ENTRY_START", "09:25"), cut=self.cfg.get("NO_NEW_ENTRY", "15:00"), sq=self.cfg.get("SQUARE_OFF", "15:15"),
                                  vol_pace=self.vol_pace, min_opt_lots=self.min_opt_lots, delta=self.tdelta),
                         calls=list(self.calls.values()))
 
