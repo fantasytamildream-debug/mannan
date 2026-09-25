@@ -28,7 +28,7 @@ class Engine:
         g = lambda k, d: type(d)(cfg.get(k, d))
         self.risk_limit = g("RISK_PER_TRADE", 2500.0); self.max_lots = g("MAX_LOTS", 1); self.min_score = g("MIN_SCORE", 60.0)
         self.top = g("TOP_PER_SIDE", 10); self.tdelta = g("TARGET_DELTA", 0.45); self.max_spread = g("MAX_SPREAD_PCT", 3.0)
-        self.min_delta = g("MIN_DELTA", 0.22); self.min_opt_lots = g("MIN_OPTION_VOLUME_LOTS", 20.0); self.vol_pace = g("VOLUME_PACE", 1.0); self.min_dte = g("MIN_DTE", 3)
+        self.min_delta = g("MIN_DELTA", 0.22); self.min_opt_lots = g("MIN_OPTION_VOLUME_LOTS", 20.0); self.min_oi_lots = g("MIN_OI_LOTS", 300.0); self.vol_pace = g("VOLUME_PACE", 1.0); self.min_dte = g("MIN_DTE", 3)
         self.index_filter = cfg.get("INDEX_FILTER", "1") == "1"; self.max_active = g("MAX_ACTIVE", 4)
         self.bar_s = g("BAR_SECONDS", 300); self.ignore_hours = cfg.get("IGNORE_MARKET_HOURS", "0") == "1"
         self.t_entry, self.t_cut, self.t_sq = hm(cfg.get("ENTRY_START", "09:25")), hm(cfg.get("NO_NEW_ENTRY", "15:00")), hm(cfg.get("SQUARE_OFF", "15:15"))
@@ -70,7 +70,9 @@ class Engine:
             for c in todo:
                 p = c.get("plan"); v = oq.get(p["token"]) if p else None
                 if not v: continue
-                p.update(ltp=v.get("ltp"), bid=v.get("bid"), ask=v.get("ask"), at=now.strftime("%H:%M:%S"))
+                p.update(ltp=v.get("ltp"), bid=v.get("bid"), ask=v.get("ask"), at=now.strftime("%H:%M:%S"), oi=v.get("oi"))
+                if v.get("oi") and not p.get("oi0"): p["oi0"] = v["oi"]
+                p["oi_chg"] = (v["oi"] / p["oi0"] - 1) * 100 if v.get("oi") and p.get("oi0") else None
                 # re-price the plan with the volatility the market is actually charging right now
                 spot = (self.q.get(c["sym"]) or {}).get("ltp")
                 mid = (v["bid"] + v["ask"]) / 2 if v.get("bid") and v.get("ask") else v.get("ltp")
@@ -224,6 +226,7 @@ class Engine:
             chk("option", "Live quote fresh", pick["fresh"], pick["age_txt"])
             chk("option", "Bid–ask spread", True, f"{pick['spread']:.2f}% (max {self.max_spread:g}%)")
             chk("option", "Traded volume", True, f"{pick['vol_lots']:.0f} lots today (min {self.min_opt_lots:g})")
+            chk("option", "Open interest", True, f"{pick['oi_lots']:.0f} lots outstanding (min {self.min_oi_lots:g})" if pick.get("oi") else "broker sent no OI for this strike")
             chk("option", f"Risk ≤ ₹{self.risk_limit:,.0f}", True, f"₹{pick['risk_lot']:,.0f} per lot incl. costs")
         else:
             chk("option", "Tradable option contract", False, why, "No tradable option")
@@ -243,6 +246,8 @@ class Engine:
                             chase=round(pick["ask"] * 1.05, 2), risk_lot=pick["risk_lot"]),
                  levels=dict(sl=c["sl"], t=tg, R=R, est=dict(sl=pick["est_sl"], t=pick["est_t"])), reason="Entry taken")
         self.optq[pick["contract"]["token"]] = dict(ltp=pick["ltp"], bid=pick["bid"], ask=pick["ask"])
+        c["oi_wall"] = self.oi_profile(c, entry_spot, tg[0], now)
+        c["oi0"] = pick.get("oi")
         e = self.ev(c, now, "entry", f"ENTRY {pick['contract']['name']} at ₹{f2(pick['ask'])} (spot {f2(entry_spot)})", spot=entry_spot, prem=pick["ask"])
         self.alert(c, "entry", e)
 
@@ -270,6 +275,8 @@ class Engine:
             vol_lots = (v.get("volume") or 0) / max(1, lot)
             if spread > self.max_spread: rej.append(f"{x['strike']:g}: spread {spread:.1f}%"); continue
             if vol_lots < self.min_opt_lots: rej.append(f"{x['strike']:g}: only {vol_lots:.0f} lots traded"); continue
+            oi_lots = (v.get("oi") or 0) / max(1, lot)
+            if v.get("oi") is not None and oi_lots < self.min_oi_lots: rej.append(f"{x['strike']:g}: open interest only {oi_lots:.0f} lots"); continue
             if not fresh: rej.append(f"{x['strike']:g}: quote {age:.0f}s old"); continue
             iv = S.implied_vol(mid, spot, x["strike"], T, .065, c["side"]) or max(.15, c["f"]["hv"] * 1.2)
             delta = S.bs(spot, x["strike"], T, .065, iv, c["side"])[1]
@@ -280,7 +287,7 @@ class Engine:
             risk = (v["ask"] - est_sl) * lot + S.friction(v["ask"] * lot, est_sl * lot)
             cands.append(dict(contract=dict(name=name, token=x["token"], strike=x["strike"], expiry=ex.isoformat(), lot=lot), ltp=v["ltp"], bid=v["bid"], ask=v["ask"],
                               spread=spread, vol_lots=vol_lots, fresh=fresh, age_txt="exchange time not sent" if age is None else f"{age:.0f}s old",
-                              iv=iv, delta=delta, est_sl=est_sl, est_t=est_t, risk_lot=risk))
+                              iv=iv, delta=delta, est_sl=est_sl, est_t=est_t, risk_lot=risk, oi=v.get("oi"), oi_lots=oi_lots))
         if not cands: return None, "no liquid strike near the money (" + ", ".join(rej[:4]) + ")"
         cands.sort(key=lambda z: abs(abs(z["delta"]) - self.tdelta))
         for z in cands:
@@ -288,10 +295,33 @@ class Engine:
         z = min(cands, key=lambda z: z["risk_lot"])
         return None, f"lowest risk is ₹{z['risk_lot']:,.0f}/lot on {z['contract']['name']}, above the ₹{self.risk_limit:,.0f} limit (stop not tightened to fit)"
 
+    def oi_profile(self, c, spot, tg1, now):
+        """Which strike carries the most open interest between the entry and T1 — the classic 'wall'."""
+        try: cons = [x for x in self.broker.contracts(c["sym"]) if x["type"] == c["side"]]
+        except Exception: return None
+        if not cons: return None
+        ex = c["contract"]["expiry"]
+        pool = [x for x in cons if str(x["expiry"]) == ex]
+        lo, hi = (spot, tg1) if c["side"] == "CE" else (tg1, spot)
+        band = sorted([x for x in pool if lo - 1e-9 <= x["strike"] <= hi + 1e-9], key=lambda x: x["strike"])[:20]
+        if not band: return None
+        try: oq = self.broker.option_quotes([x["token"] for x in band])
+        except Exception: return None
+        rows = [(x["strike"], (oq.get(x["token"]) or {}).get("oi") or 0) for x in band]
+        rows = [r for r in rows if r[1]]
+        if len(rows) < 2: return None
+        k, oi = max(rows, key=lambda r: r[1]); avg = sum(r[1] for r in rows) / len(rows)
+        lot = c["contract"]["lot"]
+        return dict(strike=k, oi=oi, lots=oi / max(1, lot), heavy=oi > 1.8 * avg,
+                    text=(f"Heaviest open interest before T1 sits at {k:g} ({oi / max(1, lot):,.0f} lots)"
+                          + (" — that strike often acts as a wall, so T1 may take longer" if oi > 1.8 * avg else " — nothing unusual")))
+
     # ------------------------------------------------------------------ managing an open call
     def manage(self, c, sq, bar, now):
         ce = c["side"] == "CE"; L = c["levels"]; oq = self.optq.get(c["contract"]["token"]) or {}
-        opt_ltp = oq.get("ltp") or c["entry"]["prem"]; sell_px = oq.get("bid") or opt_ltp; c["opt"] = dict(ltp=opt_ltp, bid=oq.get("bid"), ask=oq.get("ask"))
+        opt_ltp = oq.get("ltp") or c["entry"]["prem"]; sell_px = oq.get("bid") or opt_ltp
+        c["opt"] = dict(ltp=opt_ltp, bid=oq.get("bid"), ask=oq.get("ask"), oi=oq.get("oi"),
+                        oi_chg=(oq.get("oi") / c["oi0"] - 1) * 100 if oq.get("oi") and c.get("oi0") else None)
         hi = lo = sq["ltp"]                      # only prices seen since the previous poll count
         if sq.get("high") and c.get("_dh") and sq["high"] > c["_dh"]: hi = max(hi, sq["high"])
         if sq.get("low") and c.get("_dl") and sq["low"] < c["_dl"]: lo = min(lo, sq["low"])
