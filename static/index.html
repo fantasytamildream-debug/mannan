@@ -327,7 +327,7 @@ function card(c){const e=c.entry,L=c.levels,k=c.contract,ce=c.side==='CE',live=c
   const tgt=i=>{const h=hits['T'+(i+1)];return lv('t'+(h?' hit':''),'T'+(i+1),L.t[i],h?h.prem:L.est.t[i],!!h,h?'✓ '+h.t:'')};
   const ex=c.lots===1?'1 lot: T1 → stop to cost, T2 → stop to T1, T3 exit':c.lots===2?'2 lots: 1 out at T1 (stop to cost), last lot trails to T3':`${c.lots} lots: a third out at each target`;
   return `<article class="card ${ce?'ce':'pe'}"><div class="ch"><div><h2>${esc(k.name)}</h2><div class="sub">${ce?'BUY CALL':'BUY PUT'} · lot ${k.lot} × ${c.lots} · quality ${c.score.toFixed(0)}/100${c.strong?' · 🔥 strong move':''}</div></div>
-   <div class="right">${rvolTag(c)}${(()=>{const R=rankList(),i=R.findIndex(x=>x.c.id===c.id);if(i<0)return'';const v=R[i].v;return `<span class="pill ${v.lab[1]}" title="${esc(v.why.join('; '))}">${i===0?'🥇 ':''}${v.lab[0]} ${v.s.toFixed(0)}/100</span>`})()}<span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div></div>
+   <div class="right">${idxTag(c)}${rvolTag(c)}${(()=>{const R=rankList(),i=R.findIndex(x=>x.c.id===c.id);if(i<0)return'';const v=R[i].v;return `<span class="pill ${v.lab[1]}" title="${esc(v.why.join('; '))}">${i===0?'🥇 ':''}${v.lab[0]} ${v.s.toFixed(0)}/100</span>`})()}<span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div></div>
    ${lightBar(c)}${roadmap(c)}
    <div class="big"><div><small>Entry · ${e.t} IST</small><b>₹${f2(e.prem)}${SRC(true)}</b><em>don't buy above ₹${f2(e.chase)}</em></div>
     <div><small>${live?'Now · LTP':'Exit'}</small><b>${live?'₹'+f2(o.ltp!=null?o.ltp:nowPx)+SRC(!!o.ltp):exitEv?'₹'+f2(exitEv.prem)+SRC(true):c.hits.length?'₹'+f2(c.hits[c.hits.length-1].prem)+SRC(true):'–'}</b><em>${live?`<span class="${p.pct>=0?'up':'dn'}">${p.pct>=0?'+':''}${(p.pct||0).toFixed(1)}%</span>${o.bid?` · bid ${f2(o.bid)} / ask ${f2(o.ask)}`:''}`:exitEv?exitEv.t+' IST':''}</em></div>
@@ -341,7 +341,7 @@ function card(c){const e=c.entry,L=c.levels,k=c.contract,ce=c.side==='CE',live=c
    <div class="cf"><button class="btn pri" data-copy="${c.id}">Copy call</button><label class="note"><input type="checkbox" data-mine="${c.id}" ${MINE[c.id]?'checked':''}> I took this trade</label></div></article>`}
 function checksHTML(c){if(!c.checks||!c.checks.length)return'';const g=n=>c.checks.filter(x=>x.group===n).map(x=>`<div class="ck ${x.ok?'':'no'}">${esc(x.name)}<small>${esc(x.detail)}</small></div>`).join('');return `<div class="checks"><h4>Stock checks</h4>${g('stock')}<h4>Option checks</h4>${g('option')}</div>`}
 function mini(c){const ce=c.side==='CE',st=STAT[c.status],d=c.spot?Math.abs(c.trig-c.spot):null;
-  return `<article class="card ${ce?'ce':'pe'}"><div class="ch"><div><h2>${c.plan?esc(c.plan.name):c.sym+' '+c.side}</h2><div class="sub">${c.side==='CE'?'BUY CALL':'BUY PUT'} setup · trigger ${f2(c.trig)} · stop ${f2(c.sl)} · spot ${f2(c.spot)} · quality ${c.score.toFixed(0)}/100</div></div><div class="right">${rvolTag(c)}<span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div></div>
+  return `<article class="card ${ce?'ce':'pe'}"><div class="ch"><div><h2>${c.plan?esc(c.plan.name):c.sym+' '+c.side}</h2><div class="sub">${c.side==='CE'?'BUY CALL':'BUY PUT'} setup · trigger ${f2(c.trig)} · stop ${f2(c.sl)} · spot ${f2(c.spot)} · quality ${c.score.toFixed(0)}/100</div></div><div class="right">${idxTag(c)}${rvolTag(c)}<span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div></div>
    ${lightBar(c)}${c.plan?roadmap(c):''}
    ${['WATCHING','NEAR','BREAKOUT','BLOCKED'].includes(c.status)?track(c)+planBox(c):''}
    <details class="more"><summary>${TA()?'ஏன்? · checks & quality':'Why this setup? · checks & quality'}</summary>
@@ -357,6 +357,8 @@ const QMAX={trend:30,volume:20,close:20,coil:15,avwap:15};
 const QLAB={trend:'Trend (20/50-day)',volume:'Volume yesterday',close:'Close strength',coil:'Coil / tight range',avwap:'Distance from AVWAP'};
 function qualityHTML(c){const p=c.parts||{};
   return `<div class="qual"><h4>${TA()?'Quality':'Quality'} ${c.score.toFixed(0)}/100 — ${TA()?'எப்படி வந்தது':'how it adds up'}</h4>${Object.keys(QMAX).map(k=>`<div class="qrow"><span>${QLAB[k]}</span><div class="meter"><i style="width:${(p[k]||0)/QMAX[k]*100}%"></i></div><b>${(p[k]||0).toFixed(0)}/${QMAX[k]}</b></div>`).join('')}<p class="note">${TA()?'இது setup தரம் மட்டும், வெற்றி வாய்ப்பு அல்ல.':'A setup grade only. It is not a win probability.'}</p></div>`}
+const IDX=new Set(['NIFTY','BANKNIFTY','FINNIFTY']);
+const idxTag=c=>IDX.has(c.sym)?'<span class="pill am">INDEX</span>':'';
 const rvolTag=c=>c.rvol==null?'':`<span class="pill ${c.rvol>=3?'bad':c.rvol>=2?'am':'mute'}" title="Volume so far today vs its normal pace">${c.rvol>=3?'🔥':c.rvol>=2?'⚡':'👀'} RVOL ${c.rvol.toFixed(1)}×</span>`;
 
 /* ---------------- traffic light + road map ---------------- */
