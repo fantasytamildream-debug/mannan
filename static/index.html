@@ -146,6 +146,14 @@ tr.wl td:first-child{box-shadow:inset 3px 0 var(--amber)}
 .road.dead{opacity:.45}
 .gate{padding:8px 12px;border-top:1px solid var(--line);font-size:13.5px;background:color-mix(in srgb,var(--pe) 7%,transparent)}
 .gate.on{background:color-mix(in srgb,var(--amber) 12%,transparent)}
+
+.qual{padding:8px 16px 12px;border-top:1px solid var(--line)}
+.qual h4{margin:4px 0 6px;font:700 13px var(--fc);color:var(--mute);text-transform:uppercase;letter-spacing:.05em}
+.qrow{display:grid;grid-template-columns:minmax(120px,1.4fr) minmax(60px,2fr) 52px;gap:10px;align-items:center;font-size:13px;padding:2px 0}
+.qrow b{text-align:right;font:600 13px var(--fc)}
+.five{display:inline-block;font:700 13px var(--fc);padding:4px 10px;border-radius:3px;background:var(--panel);border:1px solid var(--line);color:var(--mute);margin:4px 0}
+.five.full{background:var(--amber);color:#1a1205;border-color:var(--amber)}
+@media (max-width:700px){#lvtbl table th:nth-child(n+9):nth-child(-n+13),#lvtbl table td:nth-child(n+9):nth-child(-n+13){display:none}}
 </style></head><body>
 <header class="top">
  <div class="bar1"><div class="brand">KRT <b>Options</b> Terminal</div><span id="feed" class="feed disconnected">Connecting…</span>
@@ -159,12 +167,12 @@ tr.wl td:first-child{box-shadow:inset 3px 0 var(--amber)}
  <section id="hist" hidden>
   <div class="panel pad"><div class="daynav"><button class="btn" id="d-prev" aria-label="Previous day">◀</button><input type="date" id="d-pick" class="s" aria-label="Pick a date"><button class="btn" id="d-next" aria-label="Next day">▶</button><button class="btn" id="d-today">Today</button><button class="btn" id="d-yest">Yesterday</button><span id="d-src"></span></div></div>
   <div class="strip" id="d-strip"></div><div id="d-body"></div></section>
- <section id="near" hidden><p class="note">Stocks from today's watchlist, closest to their trigger first. No entry until a 5-minute candle closes beyond the trigger and every check passes.</p><div class="list" id="nearlist"></div></section>
- <section id="jack" hidden><div class="panel pad"><h3>🔥 Jackpot Watch: strong-move candidates</h3><p class="note">Setups with a tight 3-day range (coil) that can break out hard. A 🔥 call needs all five: coil, volume at 1.5× pace, first-5-minute range break, NIFTY in the same direction, and room to T1. This marks a stronger setup; it does <b>not</b> promise 2× or 5× and is not a win probability. Whether these filters actually help is tracked in Performance.</p></div><div class="grid" id="jackgrid"></div></section>
+ <section id="near" hidden><p class="note">Stocks from today's watchlist, closest to their trigger first. No entry until a 5-minute candle closes beyond the trigger and every check passes.</p><div id="neartop"></div><h3 style="margin:14px 0 8px">Everything on the watchlist</h3><div class="list" id="nearlist"></div></section>
+ <section id="jack" hidden><div class="panel pad"><h3>🔥 High momentum watch <span class="pill am">jackpot</span></h3><p class="note">Setups with a tight 3-day range (coil) that can break out hard. A 🔥 call needs all five: coil, volume at 1.5× pace, first-5-minute range break, NIFTY in the same direction, and room to T1. This marks a stronger setup; it does <b>not</b> promise 2× or 5× and is not a win probability. Whether these filters actually help is tracked in Performance.</p></div><div class="grid" id="jackgrid"></div></section>
  <section id="perf" hidden>
   <div class="panel pad"><h3>Forward calls (recorded live by this terminal)</h3><p class="note" id="perf-note"></p><div class="strip" id="perfstrip"></div>
    <div class="chips" id="perfchips"><button class="chip" data-p="all" aria-pressed="true">All calls</button><button class="chip" data-p="strong" aria-pressed="false">🔥 only</button><button class="chip" data-p="live" aria-pressed="false">Live only</button><button class="chip" data-p="replay" aria-pressed="false">Replay only</button><button class="chip" data-p="mine" aria-pressed="false">Trades I took</button></div>
-   <div class="scroll"><table class="t" id="histtbl"></table></div></div>
+   <div id="perfextra"></div><div class="scroll"><table class="t" id="histtbl"></table></div></div>
   <div class="panel pad"><h3>Old package history (zip, 2021 – 16 Sep 2026) <span class="pill bad">Unverified</span></h3><div class="note" id="btnote"></div></div>
  </section>
  <section id="levels" hidden><div class="panel"><div class="pad" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><h3 style="margin:0" id="lvtitle">Levels for today</h3><input class="s" id="lvq" placeholder="Search symbol" aria-label="Search symbol"><span class="note" id="lvnote"></span></div><div class="pad" style="padding-top:0"><details><summary class="note" style="cursor:pointer"><b>What do these columns mean?</b></summary><div class="lvhelp">
@@ -214,11 +222,22 @@ function tickHeader(){const now=new Date(Date.now()+OFF),ist=new Date(now.getTim
 const toM=s=>{const[a,b]=s.split(':');return +a*60+ +b};
 
 /* ---------------- events: sound + toast ---------------- */
+function nearAlerts(){if(!ST||!U.sound)return;
+  for(const c of ST.calls){
+    const k=c.id+'|near';
+    if(['NEAR','BREAKOUT'].includes(c.status)&&!SEEN[k]){SEEN[k]=1;store.set('krt_seen',SEEN);
+      const d=Math.abs(c.trig-(c.spot||c.trig));toast(`${c.sym} ${c.side} · ${f2(d)} from trigger`);beep('near');
+      notify(`${c.sym} ${c.side} near trigger`,`${f2(d)} away from ${f2(c.trig)} — do not buy yet`)}
+    const ik=c.id+'|invalid';
+    if(c.status==='INVALID'&&!SEEN[ik]){SEEN[ik]=1;store.set('krt_seen',SEEN);
+      notify(`${c.sym} ${c.side} cancelled`,`Stop ${f2(c.sl)} broke before entry — do not trade`)}}}
+function notify(title,body){if('Notification'in window&&Notification.permission==='granted'){try{new Notification('KRT · '+title,{body})}catch(e){}}}
 function events(){let n=0,last=null;for(const c of ST.calls)for(const e of c.events){if(!['entry','t1','t2','t3','sl','exit'].includes(e.kind))continue;const k=c.id+e.kind+e.t;if(SEEN[k])continue;SEEN[k]=1;n++;last=[c,e]}
   store.set('krt_seen',SEEN);if(FIRST){FIRST=false;return}
   if(n&&last){toast(`${last[1].t} · ${last[0].contract?last[0].contract.name:last[0].sym}: ${last[1].kind.toUpperCase()}`);if(U.sound)beep(last[1].kind);
-    if(U.sound&&'Notification'in window&&Notification.permission==='granted')new Notification('KRT · '+(last[0].contract||{}).name,{body:last[1].text})}}
-let AC;function beep(kind){try{AC=AC||new AudioContext();const seq=kind==='entry'?[660,880]:kind.startsWith('t')?[880,1175]:[330,220];seq.forEach((f,i)=>{const o=AC.createOscillator(),g=AC.createGain();o.frequency.value=f;o.connect(g);g.connect(AC.destination);const t=AC.currentTime+i*.18;g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+.16);o.start(t);o.stop(t+.17)})}catch(e){}}
+    notify((last[0].contract||{}).name||last[0].sym,last[1].text)}
+  nearAlerts()}
+let AC;function beep(kind){try{AC=AC||new AudioContext();const seq=kind==='entry'?[660,880,1320]:kind==='near'?[520]:kind.startsWith('t')?[880,1175]:[330,220];seq.forEach((f,i)=>{const o=AC.createOscillator(),g=AC.createGain();o.frequency.value=f;o.connect(g);g.connect(AC.destination);const t=AC.currentTime+i*.18;g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+.16);o.start(t);o.stop(t+.17)})}catch(e){}}
 
 /* ---------------- explanations (rule-based, never invents numbers) ---------------- */
 const TAN={'Entry not late':'late entry (move ஏற்கனவே நடந்துவிட்டது)','Volume above normal pace':'volume போதவில்லை','NIFTY not against the trade':'NIFTY எதிர் திசையில் உள்ளது','Room to T1':'T1-க்கு முன் 3-நாள் high/low தடையாக உள்ளது','Open-call limit':'ஏற்கனவே அதிக calls active','Tradable option contract':'சரியான option contract இல்லை (spread / volume / risk)'};
@@ -308,7 +327,7 @@ function card(c){const e=c.entry,L=c.levels,k=c.contract,ce=c.side==='CE',live=c
   const tgt=i=>{const h=hits['T'+(i+1)];return lv('t'+(h?' hit':''),'T'+(i+1),L.t[i],h?h.prem:L.est.t[i],!!h,h?'✓ '+h.t:'')};
   const ex=c.lots===1?'1 lot: T1 → stop to cost, T2 → stop to T1, T3 exit':c.lots===2?'2 lots: 1 out at T1 (stop to cost), last lot trails to T3':`${c.lots} lots: a third out at each target`;
   return `<article class="card ${ce?'ce':'pe'}"><div class="ch"><div><h2>${esc(k.name)}</h2><div class="sub">${ce?'BUY CALL':'BUY PUT'} · lot ${k.lot} × ${c.lots} · quality ${c.score.toFixed(0)}/100${c.strong?' · 🔥 strong move':''}</div></div>
-   <div class="right">${(()=>{const R=rankList(),i=R.findIndex(x=>x.c.id===c.id);if(i<0)return'';const v=R[i].v;return `<span class="pill ${v.lab[1]}" title="${esc(v.why.join('; '))}">${i===0?'🥇 ':''}${v.lab[0]} ${v.s.toFixed(0)}/100</span>`})()}<span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div></div>
+   <div class="right">${rvolTag(c)}${(()=>{const R=rankList(),i=R.findIndex(x=>x.c.id===c.id);if(i<0)return'';const v=R[i].v;return `<span class="pill ${v.lab[1]}" title="${esc(v.why.join('; '))}">${i===0?'🥇 ':''}${v.lab[0]} ${v.s.toFixed(0)}/100</span>`})()}<span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div></div>
    ${lightBar(c)}${roadmap(c)}
    <div class="big"><div><small>Entry · ${e.t} IST</small><b>₹${f2(e.prem)}${SRC(true)}</b><em>don't buy above ₹${f2(e.chase)}</em></div>
     <div><small>${live?'Now · LTP':'Exit'}</small><b>${live?'₹'+f2(o.ltp!=null?o.ltp:nowPx)+SRC(!!o.ltp):exitEv?'₹'+f2(exitEv.prem)+SRC(true):c.hits.length?'₹'+f2(c.hits[c.hits.length-1].prem)+SRC(true):'–'}</b><em>${live?`<span class="${p.pct>=0?'up':'dn'}">${p.pct>=0?'+':''}${(p.pct||0).toFixed(1)}%</span>${o.bid?` · bid ${f2(o.bid)} / ask ${f2(o.ask)}`:''}`:exitEv?exitEv.t+' IST':''}</em></div>
@@ -317,19 +336,28 @@ function card(c){const e=c.entry,L=c.levels,k=c.contract,ce=c.side==='CE',live=c
    ${live?track(c):''}<div class="rule"><b>Exit rule:</b> ${ex}. Square-off ${ST.cfg.sq}. Levels are on the stock price; option prices at targets are ${SRC(false)} until hit.</div>
    <div class="explain"><span class="lab">${TA()?'ஏன் இந்த call?':'Why this call'}</span>${esc(explain(c))}</div>
    ${c.spark.length>2?`<div class="spark"><figure><figcaption>Spot · 5-min closes</figcaption>${spark(c.spark,[L.sl,e.spot,...L.t])}</figure>${c.ospark.length>1?`<figure><figcaption>Option · 5-min</figcaption>${spark(c.ospark,[e.prem])}</figure>`:''}</div>`:''}
-   <details class="more"><summary>Timeline, checks &amp; contract details</summary><ul class="tl">${c.events.map(x=>`<li><time>${x.t}</time><span>${esc(x.text)}</span></li>`).join('')}</ul>${checksHTML(c)}
+   <details class="more"><summary>Timeline, checks &amp; contract details</summary><ul class="tl">${c.events.map(x=>`<li><time>${x.t}</time><span>${esc(x.text)}</span></li>`).join('')}</ul>${checksHTML(c)}${qualityHTML(c)}
    <div class="rule">Expiry ${k.expiry} · IV at entry ${(e.iv*100).toFixed(1)}% · delta ${e.delta.toFixed(2)} · spot R ${f2(L.R)}</div></details>
    <div class="cf"><button class="btn pri" data-copy="${c.id}">Copy call</button><label class="note"><input type="checkbox" data-mine="${c.id}" ${MINE[c.id]?'checked':''}> I took this trade</label></div></article>`}
 function checksHTML(c){if(!c.checks||!c.checks.length)return'';const g=n=>c.checks.filter(x=>x.group===n).map(x=>`<div class="ck ${x.ok?'':'no'}">${esc(x.name)}<small>${esc(x.detail)}</small></div>`).join('');return `<div class="checks"><h4>Stock checks</h4>${g('stock')}<h4>Option checks</h4>${g('option')}</div>`}
 function mini(c){const ce=c.side==='CE',st=STAT[c.status],d=c.spot?Math.abs(c.trig-c.spot):null;
-  return `<article class="card ${ce?'ce':'pe'}"><div class="ch"><div><h2>${c.plan?esc(c.plan.name):c.sym+' '+c.side}</h2><div class="sub">${c.side==='CE'?'BUY CALL':'BUY PUT'} setup · trigger ${f2(c.trig)} · stop ${f2(c.sl)} · spot ${f2(c.spot)} · quality ${c.score.toFixed(0)}/100</div></div><div class="right"><span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div></div>
+  return `<article class="card ${ce?'ce':'pe'}"><div class="ch"><div><h2>${c.plan?esc(c.plan.name):c.sym+' '+c.side}</h2><div class="sub">${c.side==='CE'?'BUY CALL':'BUY PUT'} setup · trigger ${f2(c.trig)} · stop ${f2(c.sl)} · spot ${f2(c.spot)} · quality ${c.score.toFixed(0)}/100</div></div><div class="right">${rvolTag(c)}<span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div></div>
    ${lightBar(c)}${c.plan?roadmap(c):''}
    ${['WATCHING','NEAR','BREAKOUT','BLOCKED'].includes(c.status)?track(c)+planBox(c):''}
-   <div class="explain"><span class="lab">${TA()?'நிலை':'Status'}</span>${esc(explain(c))}</div>${checksHTML(c)}</article>`}
+   <details class="more"><summary>${TA()?'ஏன்? · checks & quality':'Why this setup? · checks & quality'}</summary>
+   <div class="explain"><span class="lab">${TA()?'நிலை':'Status'}</span>${esc(explain(c))}</div>${checksHTML(c)}${qualityHTML(c)}</details></article>`}
 function spark(pts,lines){const v=pts.map(p=>+p[1]),all=v.concat(lines),mn=Math.min(...all),mx=Math.max(...all),W=300,H=60,x=i=>i/(v.length-1||1)*W,y=a=>H-4-(a-mn)/((mx-mn)||1)*(H-8);
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${lines.map((l,i)=>`<line x1="0" x2="${W}" y1="${y(l)}" y2="${y(l)}" stroke="${i===0&&lines.length>2?'var(--pe)':i===1||lines.length===1?'var(--mute)':'var(--ok)'}" stroke-dasharray="3 3" stroke-width="1"/>`).join('')}<polyline fill="none" stroke="var(--amber)" stroke-width="2" points="${v.map((a,i)=>x(i)+','+y(a)).join(' ')}"/></svg>`}
 
 
+
+
+/* ---------------- quality breakdown ("why 82?") + live RVOL ---------------- */
+const QMAX={trend:30,volume:20,close:20,coil:15,avwap:15};
+const QLAB={trend:'Trend (20/50-day)',volume:'Volume yesterday',close:'Close strength',coil:'Coil / tight range',avwap:'Distance from AVWAP'};
+function qualityHTML(c){const p=c.parts||{};
+  return `<div class="qual"><h4>${TA()?'Quality':'Quality'} ${c.score.toFixed(0)}/100 — ${TA()?'எப்படி வந்தது':'how it adds up'}</h4>${Object.keys(QMAX).map(k=>`<div class="qrow"><span>${QLAB[k]}</span><div class="meter"><i style="width:${(p[k]||0)/QMAX[k]*100}%"></i></div><b>${(p[k]||0).toFixed(0)}/${QMAX[k]}</b></div>`).join('')}<p class="note">${TA()?'இது setup தரம் மட்டும், வெற்றி வாய்ப்பு அல்ல.':'A setup grade only. It is not a win probability.'}</p></div>`}
+const rvolTag=c=>c.rvol==null?'':`<span class="pill ${c.rvol>=3?'bad':c.rvol>=2?'am':'mute'}" title="Volume so far today vs its normal pace">${c.rvol>=3?'🔥':c.rvol>=2?'⚡':'👀'} RVOL ${c.rvol.toFixed(1)}×</span>`;
 
 /* ---------------- traffic light + road map ---------------- */
 function signal(c){
@@ -379,14 +407,18 @@ function planBox(c){const p=c.plan;if(!p)return `<div class="plan"><div class="f
 
 /* ---------------- near trigger / jackpot ---------------- */
 function renderNear(){const L=ST.calls.filter(c=>['NEAR','BREAKOUT','WATCHING','BLOCKED'].includes(c.status)&&c.spot).map(c=>({c,d:(c.side==='CE'?c.trig-c.spot:c.spot-c.trig)/c.planR})).sort((a,b)=>a.d-b.d);
-  $('#nearlist').innerHTML=L.length?L.map(({c,d})=>{const st=STAT[c.status],pct=Math.max(0,Math.min(100,(1-Math.max(0,d)/3)*100));return `<div class="row"><div><span class="s ${c.side.toLowerCase()}">${c.plan?esc(c.plan.name.split(' ').slice(0,3).join(' ')):c.sym+' '+c.side}</span><div class="note">quality ${c.score.toFixed(0)}${c.plan&&c.plan.ltp!=null?' · option ₹'+f2(c.plan.ltp):''}${c.plan?' · SL '+f2(c.sl)+' · T1 '+f2(c.plan.spot_t[0]):''}</div></div><div><span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div><div class="num">spot ${f2(c.spot)}<br><span class="note">trigger ${f2(c.trig)}</span><div class="meter"><i style="width:${pct}%"></i></div></div><div class="why">${esc(explain(c))}</div></div>`}).join(''):'<div class="empty">No live prices yet. The list fills once the market opens.</div>'}
+  const top=L.slice(0,3);
+  $('#neartop').innerHTML=top.length?`<h3>${TA()?'🔥 Trigger-க்கு மிக அருகில் 3':'🔥 Top 3 closest setups'}</h3><div class="grid">${top.map(x=>mini(x.c)).join('')}</div>`:'';
+  $('#nearlist').innerHTML=L.length?L.map(({c,d})=>{const st=STAT[c.status],pct=Math.max(0,Math.min(100,(1-Math.max(0,d)/3)*100));return `<div class="row"><div><span class="s ${c.side.toLowerCase()}">${c.plan?esc(c.plan.name.split(' ').slice(0,3).join(' ')):c.sym+' '+c.side}</span><div class="note">quality ${c.score.toFixed(0)}${c.plan&&c.plan.ltp!=null?' · option ₹'+f2(c.plan.ltp):''}${c.plan?' · SL '+f2(c.sl)+' · T1 '+f2(c.plan.spot_t[0]):''}</div></div><div><span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div><div class="num">${f2(Math.abs(c.trig-c.spot))} away<br><span class="note">spot ${f2(c.spot)} → ${f2(c.trig)}</span><div class="meter"><i style="width:${pct}%"></i></div></div><div class="why">${esc(explain(c))}</div></div>`}).join(''):'<div class="empty">No live prices yet. The list fills once the market opens.</div>'}
 function renderJack(){const ORD={ACTIVE:0,CLOSED:1,BREAKOUT:2,NEAR:3,BLOCKED:4,WATCHING:5,INVALID:6,EXPIRED:7};const L=ST.calls.filter(c=>c.parts.coil>=7.5).sort((a,b)=>b.strong-a.strong||ORD[a.status]-ORD[b.status]||b.score-a.score);
   $('#jackgrid').innerHTML=L.length?L.map(c=>{const stage=c.status==='CLOSED'?(c.hits.length?'Target':'SL'):c.status==='ACTIVE'?'Triggered':c.status==='BLOCKED'?'Not taken':['INVALID','EXPIRED'].includes(c.status)?'Over':c.strong?'Confirmed':'Watching';
    const flow=['Watching','Confirmed','Triggered','Target','SL','Not taken','Over'].map(s=>`<span class="${s===stage?'on':''}">${s}</span>`).join('');
    const ck=(ok,t)=>`<div class="ck ${ok?'':'no'}">${t}</div>`,pace=(c.checks||[]).find(x=>x.name.startsWith('Volume'));
+   const five=[true,(c.rvol||0)>=1.5,!!c.orb_break,!!(ST.nifty&&(c.side==='CE'?ST.nifty.chg>0:ST.nifty.chg<0)),!(c.checks||[]).some(x=>x.name==='Room to T1'&&!x.ok)],np=five.filter(Boolean).length;
    if(c.entry)return card(c).replace('<div class="ladder">',`<div class="pad" style="padding-bottom:0"><div class="flow">${flow}</div></div><div class="ladder">`);
    return `<article class="card ${c.side.toLowerCase()}"><div class="ch"><div><h2>${c.strong?'🔥 ':''}${c.plan?esc(c.plan.name):c.sym+' '+c.side}</h2><div class="sub">${c.side==='CE'?'BUY CALL':'BUY PUT'} setup · trigger ${f2(c.trig)} · quality ${c.score.toFixed(0)}/100</div></div></div>${lightBar(c)}${c.plan?roadmap(c):''}${['WATCHING','NEAR','BREAKOUT','BLOCKED'].includes(c.status)?track(c)+planBox(c):''}<div class="pad" style="padding-top:0"><div class="flow">${flow}</div>
-    <div class="jc">${ck(true,'Tight 3-day coil')}${ck(pace&&parseFloat(pace.detail)>=1.5,'Volume ≥1.5× pace'+(pace?' ('+pace.detail.split(' ')[0]+')':''))}${ck(c.orb_break,'First-5-min range break')}${ck(ST.nifty&&(c.side==='CE'?ST.nifty.chg>0:ST.nifty.chg<0),'NIFTY same direction')}${ck(!(c.checks||[]).some(x=>x.name==='Room to T1'&&!x.ok),'Room to T1')}</div>
+    <div class="five ${np===5?'full':''}">${np===5?'🔥 5/5 CONFIRMED':np+'/5 ready'}</div>
+    <div class="jc">${ck(true,'Tight 3-day coil')}${ck((c.rvol||0)>=1.5,'Volume ≥1.5× pace'+(c.rvol?' ('+c.rvol.toFixed(1)+'×)':''))}${ck(c.orb_break,'First-5-min range break')}${ck(ST.nifty&&(c.side==='CE'?ST.nifty.chg>0:ST.nifty.chg<0),'NIFTY same direction')}${ck(!(c.checks||[]).some(x=>x.name==='Room to T1'&&!x.ok),'Room to T1')}</div>
     <p class="note" style="margin:8px 0 0">${esc(explain(c))}</p></div></article>`}).join(''):'<div class="empty">No coiled setups in today\'s watchlist.</div>'}
 
 /* ---------------- performance ---------------- */
@@ -396,6 +428,12 @@ function renderPerf(){let H=HIST.slice().reverse();if(U.pf==='strong')H=H.filter
   $('#perf-note').innerHTML=H.length<30?`<b>${H.length} call${H.length===1?'':'s'} so far.</b> Under 30 calls the numbers are mostly luck; don't judge the strategy yet.`:'Every call below was decided live at a candle close, with live option prices. Nothing uses information from after the call.';
   $('#perfstrip').innerHTML=[['Calls',H.length],['Win rate',H.length?(w.length/H.length*100).toFixed(1)+'%':'–'],['Avg win',rs(aw)],['Avg loss',rs(al)],['Expectancy / call',H.length?rs(net/H.length):'–'],['Net',rs(net)],['Max drawdown',rs(-dd)]].map(([a,b])=>`<div><small>${a}</small><b>${b}</b></div>`).join('');
   $$('#perfchips .chip').forEach(b=>b.setAttribute('aria-pressed',b.dataset.p===U.pf));
+  const eqpts=[];let run=0;for(const x of H.slice().reverse()){run+=x.pnl;eqpts.push(run)}
+  const ce=H.filter(x=>/CE/.test(x.contract||'')),pe=H.filter(x=>/PE/.test(x.contract||'')),jk=H.filter(x=>x.strong);
+  const hit=n=>H.length?(H.filter(x=>(x.hits||[]).includes(n)).length/H.length*100).toFixed(0)+'%':'–';
+  const sub=a=>a.length?`${a.length} · ${(a.filter(x=>x.pnl>0).length/a.length*100).toFixed(0)}% · ${rs(a.reduce((s,x)=>s+x.pnl,0))}`:'–';
+  $('#perfextra').innerHTML=H.length?`<div class="pad"><h3>Equity curve (net, per call)</h3>${eqpts.length>1?spark(eqpts.map((v,i)=>[i,v]),[0]):'<p class="note">Two or more calls needed.</p>'}
+   <div class="strip" style="margin-top:12px">${[['CE calls',sub(ce)],['PE calls',sub(pe)],['🔥 jackpot calls',sub(jk)],['T1 hit',hit('T1')],['T2 hit',hit('T2')],['T3 hit',hit('T3')]].map(([a,b])=>`<div><small>${a}</small><b style="font-size:16px">${b}</b></div>`).join('')}</div></div>`:'';
   $('#histtbl').innerHTML='<thead><tr><th>Date</th><th>Contract</th><th>Entry</th><th class="n">Entry ₹</th><th>Targets hit</th><th>Result</th><th class="n">Net</th><th>Took it</th></tr></thead><tbody>'+H.map(h=>`<tr><td>${h.day}</td><td>${h.strong?'🔥 ':''}${esc(h.contract)}${h.src==='replay'?' <span class="pill am">replay</span>':''}</td><td>${h.entry_time||''}</td><td class="n">${f2(h.entry)}</td><td>${h.hits.join(' ')||'–'}</td><td>${esc(h.result)}</td><td class="n ${h.pnl>=0?'up':'dn'}">${rs(h.pnl)}</td><td><input type="checkbox" data-mine="${h.id}" ${MINE[h.id]?'checked':''} aria-label="I took this"></td></tr>`).join('')+'</tbody>';
   if(BT)$('#btnote').innerHTML=`The original package claimed ${BT.trades} trades, ${BT.win.toFixed(1)}% wins, profit factor ${BT.pf_net.toFixed(2)} and ${rs(BT.net)} net. Those numbers are <b>not proof</b>: option prices were invented, entries used that day's closing price, and when stop and target fell on the same day the target was counted. Judge the strategy on the forward calls above.`+renderPkg()}
 
