@@ -23,7 +23,7 @@ KEYS = ("BROKER", "ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_MPIN", "ANGEL_TOT
         "QUOTE_INTERVAL_SECONDS", "RISK_PER_TRADE", "MAX_LOTS", "MIN_SCORE", "TOP_PER_SIDE", "TARGET_DELTA", "MAX_SPREAD_PCT",
         "MIN_OPTION_VOLUME_LOTS", "VOLUME_PACE", "MIN_DTE", "INDEX_FILTER", "MAX_ACTIVE", "BAR_SECONDS", "IGNORE_MARKET_HOURS",
         "ENTRY_START", "NO_NEW_ENTRY", "SQUARE_OFF", "REPLAY", "MIN_DELTA", "ANGEL_RATE_GAP",
-        "GITHUB_REPO", "GITHUB_TOKEN", "GITHUB_BRANCH", "GITHUB_DIR", "INDEX_CALLS")
+        "GITHUB_REPO", "GITHUB_TOKEN", "GITHUB_BRANCH", "GITHUB_DIR", "INDEX_CALLS", "MIN_OI_LOTS")
 
 def load_cfg():
     cfg = {"PORT": "8765", "QUOTE_INTERVAL_SECONDS": "6"}
@@ -172,7 +172,8 @@ def make_handler(cfg, _eng=None, _statics=None):
                 if u.path == "/api/state": return self.send(200, {"starting": True, "status": BOOT["status"], "now": now.isoformat()})
                 return self.send(503, {"error": "starting", "status": BOOT["status"]})
             if u.path == "/api/state":
-                st = eng.snapshot(now); st["storage"] = BOOT.get("storage"); st["storage_path"] = BOOT.get("storage_path"); return self.send(200, st)
+                st = eng.snapshot(now); st["storage"] = BOOT.get("storage"); st["storage_path"] = BOOT.get("storage_path")
+                st["indexes"] = BOOT.get("indexes", {}); return self.send(200, st)
             if u.path == "/api/history": return self.send(200, eng.history())
             if u.path == "/api/levels": return self.send(200, statics["levels"])
             if u.path == "/api/backtest": return self.send(200, statics["backtest"])
@@ -235,18 +236,27 @@ def main():
     eng = Engine(cfg, broker, candles, {s: data["lots"][s] for s in symbols}, cache, notify)
     eng.on_file = store.queue
     # ---- index universe (NIFTY / BANKNIFTY / FINNIFTY): daily candles from the broker, lots from its contract list
-    if cfg.get("INDEX_CALLS", "1") == "1" and getattr(broker, "idx", None):
+    BOOT["indexes"] = {}
+    if cfg.get("INDEX_CALLS", "1") != "1": BOOT["indexes"]["(all)"] = "switched off (INDEX_CALLS=0)"
+    elif not getattr(broker, "idx", None): BOOT["indexes"]["(all)"] = f"{broker.name} adapter has no index support"
+    else:
         BOOT["status"] = "loading index history"
-        for name in getattr(broker, "idx", {}):
+        for name, tok in getattr(broker, "idx", {}).items():
             try:
-                rows = broker.daily(broker.idx[name]) if hasattr(broker, "daily") else data["candles"].get(name)
-                if rows and len(rows) > 55:
+                rows = broker.daily(tok) if hasattr(broker, "daily") else data["candles"].get(name)
+                cons = broker.contracts(name) or []
+                if not rows or len(rows) <= 55:
+                    BOOT["indexes"][name] = f"no daily history from the broker (token {tok}) — index skipped"
+                elif not cons:
+                    BOOT["indexes"][name] = "no option contracts in the broker's list — index skipped"
+                else:
                     candles[name] = rows; symbols.add(name)
-                    lot = (broker.contracts(name) or [{}])[0].get("lot") or 0
+                    lot = cons[0].get("lot") or 0
                     if lot: data["lots"][name] = lot
-                    log(f"Index {name}: {len(rows)} daily candles, lot {data['lots'].get(name, '?')}")
-                else: log(f"Index {name}: not enough history, skipped")
-            except Exception as e: log(f"Index {name}: {e}")
+                    BOOT["indexes"][name] = f"ready · {len(rows)} daily candles · {len(cons)} contracts · lot {data['lots'].get(name, '?')}"
+                log(f"Index {name}: {BOOT['indexes'][name]}")
+            except Exception as e:
+                BOOT["indexes"][name] = f"error: {e}"; log(f"Index {name}: {e}")
     last_lots = {s: data["lots"][s] for s in symbols if s in data["lots"]}
     if hasattr(broker, "lot_of"):                       # real lot sizes from the broker's contract list
         for s in symbols:
