@@ -23,7 +23,7 @@ KEYS = ("BROKER", "ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_MPIN", "ANGEL_TOT
         "QUOTE_INTERVAL_SECONDS", "RISK_PER_TRADE", "MAX_LOTS", "MIN_SCORE", "TOP_PER_SIDE", "TARGET_DELTA", "MAX_SPREAD_PCT",
         "MIN_OPTION_VOLUME_LOTS", "VOLUME_PACE", "MIN_DTE", "INDEX_FILTER", "MAX_ACTIVE", "BAR_SECONDS", "IGNORE_MARKET_HOURS",
         "ENTRY_START", "NO_NEW_ENTRY", "SQUARE_OFF", "REPLAY", "MIN_DELTA", "ANGEL_RATE_GAP",
-        "GITHUB_REPO", "GITHUB_TOKEN", "GITHUB_BRANCH", "GITHUB_DIR")
+        "GITHUB_REPO", "GITHUB_TOKEN", "GITHUB_BRANCH", "GITHUB_DIR", "INDEX_CALLS")
 
 def load_cfg():
     cfg = {"PORT": "8765", "QUOTE_INTERVAL_SECONDS": "6"}
@@ -234,6 +234,19 @@ def main():
                     f"{'✅' if kind.startswith('t') else '⛔' if kind in ('sl',) else '🔚'} {c['contract']['name']}\n{e['text']} at {e['t']} IST\nNet so far ≈ ₹{p.get('net', 0):,.0f}")
     eng = Engine(cfg, broker, candles, {s: data["lots"][s] for s in symbols}, cache, notify)
     eng.on_file = store.queue
+    # ---- index universe (NIFTY / BANKNIFTY / FINNIFTY): daily candles from the broker, lots from its contract list
+    if cfg.get("INDEX_CALLS", "1") == "1" and getattr(broker, "idx", None):
+        BOOT["status"] = "loading index history"
+        for name in getattr(broker, "idx", {}):
+            try:
+                rows = broker.daily(broker.idx[name]) if hasattr(broker, "daily") else data["candles"].get(name)
+                if rows and len(rows) > 55:
+                    candles[name] = rows; symbols.add(name)
+                    lot = (broker.contracts(name) or [{}])[0].get("lot") or 0
+                    if lot: data["lots"][name] = lot
+                    log(f"Index {name}: {len(rows)} daily candles, lot {data['lots'].get(name, '?')}")
+                else: log(f"Index {name}: not enough history, skipped")
+            except Exception as e: log(f"Index {name}: {e}")
     last_lots = {s: data["lots"][s] for s in symbols if s in data["lots"]}
     if hasattr(broker, "lot_of"):                       # real lot sizes from the broker's contract list
         for s in symbols:
