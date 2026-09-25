@@ -185,7 +185,7 @@ tr.wl td:first-child{box-shadow:inset 3px 0 var(--amber)}
   <div><b>Strike</b>: planned option for watchlist stocks (delta ≈ 0.45, real contract, nearest expiry with ≥ 3 days left).</div>
   <div><b>Lot</b>: from the broker's contract list.</div></div></details></div>
   <div class="scroll" id="lvtbl"></div></div></section>
- <section id="rules" hidden><div class="panel pad" id="rulebox"></div></section>
+ <section id="rules" hidden><div class="panel pad" id="idxbox"></div><div class="panel pad" id="rulebox"></div></section>
 </main>
 <div id="toast" role="status" aria-live="polite"></div>
 <script>
@@ -194,6 +194,7 @@ const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const U=Object.assign({lang:'en',sound:false,filter:'active',pf:'all'},store.get('krt_ui',{}));const saveU=()=>store.set('krt_ui',U);
 let ST=null,HIST=[],LV=[],BT=null,OFF=0,FETCHED=0,SEEN=store.get('krt_seen',{}),MINE=store.get('krt_mine',{}),FIRST=true;
+const f0=n=>n==null||isNaN(n)?'–':Math.round(n).toLocaleString('en-IN');
 const f2=n=>n==null||isNaN(n)?'–':Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
 const rs=n=>n==null||isNaN(n)?'–':(n<0?'−₹':'₹')+Math.round(Math.abs(n)).toLocaleString('en-IN');
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -330,11 +331,11 @@ function card(c){const e=c.entry,L=c.levels,k=c.contract,ce=c.side==='CE',live=c
    <div class="right">${idxTag(c)}${rvolTag(c)}${(()=>{const R=rankList(),i=R.findIndex(x=>x.c.id===c.id);if(i<0)return'';const v=R[i].v;return `<span class="pill ${v.lab[1]}" title="${esc(v.why.join('; '))}">${i===0?'🥇 ':''}${v.lab[0]} ${v.s.toFixed(0)}/100</span>`})()}<span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div></div>
    ${lightBar(c)}${roadmap(c)}
    <div class="big"><div><small>Entry · ${e.t} IST</small><b>₹${f2(e.prem)}${SRC(true)}</b><em>don't buy above ₹${f2(e.chase)}</em></div>
-    <div><small>${live?'Now · LTP':'Exit'}</small><b>${live?'₹'+f2(o.ltp!=null?o.ltp:nowPx)+SRC(!!o.ltp):exitEv?'₹'+f2(exitEv.prem)+SRC(true):c.hits.length?'₹'+f2(c.hits[c.hits.length-1].prem)+SRC(true):'–'}</b><em>${live?`<span class="${p.pct>=0?'up':'dn'}">${p.pct>=0?'+':''}${(p.pct||0).toFixed(1)}%</span>${o.bid?` · bid ${f2(o.bid)} / ask ${f2(o.ask)}`:''}`:exitEv?exitEv.t+' IST':''}</em></div>
+    <div><small>${live?'Now · LTP':'Exit'}</small><b>${live?'₹'+f2(o.ltp!=null?o.ltp:nowPx)+SRC(!!o.ltp):exitEv?'₹'+f2(exitEv.prem)+SRC(true):c.hits.length?'₹'+f2(c.hits[c.hits.length-1].prem)+SRC(true):'–'}</b><em>${live?`<span class="${p.pct>=0?'up':'dn'}">${p.pct>=0?'+':''}${(p.pct||0).toFixed(1)}%</span>${o.bid?` · bid ${f2(o.bid)} / ask ${f2(o.ask)}`:''}${o.oi?` · OI ${f0(o.oi/k.lot)} lots${o.oi_chg?` (${o.oi_chg>0?'+':''}${o.oi_chg.toFixed(1)}%)`:''}`:''}`:exitEv?exitEv.t+' IST':''}</em></div>
     <div><small>Net P&amp;L (after costs)</small><b class="${(p.net||0)>=0?'up':'dn'}">${rs(p.net)}</b><em>${live?'on bid '+f2(nowPx)+' · risk was ':'risk was '}${rs(e.risk_lot*c.lots)}</em></div></div>
    <div class="ladder">${lv('sl'+(slHit?' hitsl':''),c.stop!==L.sl&&live?'Stop (moved)':'Stop loss',live?c.stop:L.sl,live&&c.stop!==L.sl?(Math.abs(c.stop-L.t[0])<1e-6?(hits.T1?hits.T1.prem:L.est.t[0]):e.prem):L.est.sl,false,slHit&&exitEv?'✗ '+exitEv.t:'',live&&c.stop===L.sl)}${lv('en','Entry',e.spot,e.prem,true,e.t)}${tgt(0)}${tgt(1)}${tgt(2)}</div>
    ${live?track(c):''}<div class="rule"><b>Exit rule:</b> ${ex}. Square-off ${ST.cfg.sq}. Levels are on the stock price; option prices at targets are ${SRC(false)} until hit.</div>
-   <div class="explain"><span class="lab">${TA()?'ஏன் இந்த call?':'Why this call'}</span>${esc(explain(c))}</div>
+   <div class="explain"><span class="lab">${TA()?'ஏன் இந்த call?':'Why this call'}</span>${esc(explain(c))}${c.oi_wall?`<div class="note" style="margin-top:6px">${c.oi_wall.heavy?'⚠️ ':''}${esc(c.oi_wall.text)}</div>`:''}</div>
    ${c.spark.length>2?`<div class="spark"><figure><figcaption>Spot · 5-min closes</figcaption>${spark(c.spark,[L.sl,e.spot,...L.t])}</figure>${c.ospark.length>1?`<figure><figcaption>Option · 5-min</figcaption>${spark(c.ospark,[e.prem])}</figure>`:''}</div>`:''}
    <details class="more"><summary>Timeline, checks &amp; contract details</summary><ul class="tl">${c.events.map(x=>`<li><time>${x.t}</time><span>${esc(x.text)}</span></li>`).join('')}</ul>${checksHTML(c)}${qualityHTML(c)}
    <div class="rule">Expiry ${k.expiry} · IV at entry ${(e.iv*100).toFixed(1)}% · delta ${e.delta.toFixed(2)} · spot R ${f2(L.R)}</div></details>
@@ -398,7 +399,7 @@ function track(c){const ce=c.side==='CE',act=!!c.entry,L=c.levels;
 function planBox(c){const p=c.plan;if(!p)return `<div class="plan"><div class="foot">${TA()?'Strike தேர்வு ஆகிறது…':'Picking the strike…'} (needs the broker contract list)</div></div>`;
   const liveP=p.ltp!=null;const ce=c.side==='CE';
   return `<div class="plan"><div class="ph"><span class="note">${TA()?'Trigger வந்தால் வாங்க திட்டமிட்ட option':'Planned option if the trigger confirms'}</span><b class="k">${esc(p.name)}</b><span class="note">lot ${p.lot}</span>
-   <span>Now ${liveP?'₹'+f2(p.ltp)+SRC(true)+(p.bid?` <span class="note">bid ${f2(p.bid)} / ask ${f2(p.ask)}</span>`:''):'<span class="note">no live quote yet</span>'}</span></div>
+   <span>Now ${liveP?'₹'+f2(p.ltp)+SRC(true)+(p.bid?` <span class="note">bid ${f2(p.bid)} / ask ${f2(p.ask)}</span>`:''):'<span class="note">no live quote yet</span>'}</span>${p.oi?`<span class="note">OI ${f0(p.oi/p.lot)} lots${p.oi_chg?` · ${p.oi_chg>0?'+':''}${p.oi_chg.toFixed(1)}% today`:''}</span>`:''}</div>
    ${(()=>{const beyond=c.spot!=null&&(ce?c.spot>c.trig:c.spot<c.trig);
      return `<div class="gate ${beyond?'on':''}">${TA()?'Entry-ஐ முடிவு செய்வது <b>stock விலை</b>, option விலை அல்ல.':'The <b>stock price</b> decides the entry, not the option price.'} ${TA()?'Stock இப்போது':'Stock now'} <b>${f2(c.spot)}</b> · ${TA()?(ce?'தேவை: 5-நிமிட close':'தேவை: 5-நிமிட close')+' '+(ce?'மேல்':'கீழ்')+' '+f2(c.trig):'needs a 5-min candle to close '+(ce?'above':'below')+' '+f2(c.trig)} — ${beyond?(TA()?'<b>ஏற்கனவே அந்த பக்கம்</b>':'<b>already beyond it</b>')+(c.status==='BLOCKED'?(TA()?', ஆனால் checks fail':', but a check failed'):(TA()?', candle close-க்காக காத்திருக்கிறது':', waiting for the candle close')):(TA()?'இன்னும் இல்லை':'not yet')}</div>`})()}
    <table><thead><tr><th></th><th>Spot level</th><th>Option ₹ (est.) at that level</th></tr></thead><tbody>
@@ -493,7 +494,10 @@ function renderLevels(){const box=$('#lvtbl'),st=box?box.scrollTop:0;setTimeout(
   const pick=new Set();if(nextS)for(const sd of['CE','PE'])LV.filter(r=>r.side===sd&&r.trend&&r.score>=(ST?ST.cfg.min_score:60)).sort((a,b)=>b.score-a.score).slice(0,10).forEach(r=>pick.add(r.sym));
   $('#lvtitle').textContent=nextS?'Levels for the next session':'Levels for today';
   $('#lvtbl').innerHTML='<table class="t"><thead><tr><th>Symbol</th><th class="n">Last</th><th class="n">VAL</th><th class="n">VAH</th><th class="n">AVWAP</th><th>Side</th><th>Trend</th><th class="n">Quality</th><th class="n">Trigger</th><th class="n">SL</th><th class="n">T1</th><th class="n">T2</th><th class="n">T3</th>'+(nextS?'<th>Watchlist</th>':'<th>Strike (planned)</th><th>Today</th>')+'<th class="n">Lot</th></tr></thead><tbody>'+R.map(r=>{const w=W[r.sym],p=w&&w.plan;return `<tr class="${w||pick.has(r.sym)?'wl':''}"><td><b>${r.sym}</b></td><td class="n">${f2(r.last)}</td><td class="n dn">${f2(r.val)}</td><td class="n up">${f2(r.vah)}</td><td class="n">${f2(r.aw)}</td><td class="${r.side==='CE'?'up':r.side==='PE'?'dn':''}">${r.side||'inside'}</td><td>${r.side?(r.trend?'aligned':'against'):''}</td><td class="n">${r.score??''}</td><td class="n">${r.trig?f2(r.trig):''}</td><td class="n">${r.sl?f2(r.sl):''}</td>${[0,1,2].map(i=>`<td class="n">${r.t?f2(r.t[i]):''}</td>`).join('')}${nextS?`<td>${pick.has(r.sym)?'<span class="pill am">next session</span>':''}</td>`:`<td>${p?esc(p.name)+(p.ltp!=null?' · ₹'+f2(p.ltp):''):''}</td><td>${w?`<span class="pill ${STAT[w.status][1]}">${STAT[w.status][0]}</span>`:''}</td>`}<td class="n">${r.lot??''}</td></tr>`}).join('')+'</tbody></table>'}
-function renderRules(){const c=ST?ST.cfg:{};$('#rulebox').innerHTML=`<h3>One rulebook for every call</h3>
+function renderRules(){const c=ST?ST.cfg:{},ix=(ST&&ST.indexes)||{};
+  $('#idxbox').innerHTML=`<h3>Index calls (NIFTY · BANKNIFTY · FINNIFTY)</h3>${Object.keys(ix).length?`<table class="t"><tbody>${Object.entries(ix).map(([k,v])=>`<tr><td><b>${esc(k)}</b></td><td>${/ready/.test(v)?'✅':'✗'} ${esc(v)}</td></tr>`).join('')}</tbody></table>`:'<p class="note">This server build has no index support yet — upload the latest <code>server.py</code>, <code>brokers.py</code>, <code>strategy.py</code> and <code>engine.py</code>.</p>'}
+   <p class="note">Indices use the same rulebook, with two differences: the exchange publishes no spot volume for an index, so that check is skipped, and AVWAP is a plain average instead of volume-weighted. SENSEX and BANKEX are BSE contracts and are <b>not</b> supported — Angel's NSE feed doesn't carry them here.</p>`;
+  $('#rulebox').innerHTML=`<h3>One rulebook for every call</h3>
  <p><b>1. Watchlist (before 09:15).</b> Stocks whose previous close is outside the 3-day value area, on the monthly-AVWAP side, with trend aligned (price above 20- and 50-day averages for CE, below for PE) and quality score ≥ ${c.min_score}. Quality score is a setup grade, not a win chance.</p>
  <p><b>2. Trigger.</b> Value-area edge ±0.5%, beyond yesterday's high (CE) or low (PE). The stop level is fixed the night before: back inside the value area, 0.4–0.8 ATR away.</p>
  <p><b>3. Entry.</b> Only when a completed ${c.bar}-minute candle closes beyond the trigger, from ${c.entry} to ${c.cut}. At that moment every check must pass: not more than 0.5R past the trigger (late-entry blocker), volume ≥ ${c.vol_pace}× normal pace, NIFTY not against the trade, no 3-day high/low before T1, and fewer than the maximum open calls.</p>
