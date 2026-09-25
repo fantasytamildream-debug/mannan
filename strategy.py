@@ -62,13 +62,15 @@ def daily_features(c):
     p3 = c[i-2:i+1]; h = max(b[2] for b in p3); l = min(b[3] for b in p3); r = h - l
     vah, val = h - .15 * r, l + .15 * r
     m = c[i][0][:7]; mc = [b for b in c if b[0][:7] == m]; vv = sum(b[5] for b in mc)
-    aw = sum((b[2] + b[3] + b[4]) / 3 * b[5] for b in mc) / vv if vv else c[i][4]
+    aw = (sum((b[2] + b[3] + b[4]) / 3 * b[5] for b in mc) / vv if vv          # volume-weighted for stocks
+          else sum((b[2] + b[3] + b[4]) / 3 for b in mc) / len(mc))            # plain average for indices (no volume)
     atr = sum(max(c[k][2] - c[k][3], abs(c[k][2] - c[k-1][4]), abs(c[k][3] - c[k-1][4])) for k in range(i-13, i+1)) / 14
     cl = c[i][4]; s20 = sum(b[4] for b in c[i-19:i+1]) / 20; s50 = sum(b[4] for b in c[i-49:i+1]) / 50
     vavg = sum(b[5] for b in c[i-20:i]) / 20; rg = c[i][2] - c[i][3]
+    has_vol = vavg > 0
     rets = [math.log(c[k][4] / c[k-1][4]) for k in range(i-19, i+1)]; mu = sum(rets) / 20
     hv = math.sqrt(sum((x - mu) ** 2 for x in rets) / 20 * 252)
-    return dict(date=c[i][0], vah=vah, val=val, aw=aw, atr=atr, cl=cl, s20=s20, s50=s50, vavg=vavg,
+    return dict(date=c[i][0], vah=vah, val=val, aw=aw, atr=atr, cl=cl, s20=s20, s50=s50, vavg=vavg, has_vol=has_vol,
                 vr=c[i][5] / vavg if vavg else 1, clv=(cl - c[i][3]) / rg if rg > 0 else .5, hv=hv,
                 comp=r / atr if atr else 9, pdh=c[i][2], pdl=c[i][3], h3=h, l3=l)
 
@@ -83,7 +85,7 @@ def trend_ok(f, sd):
 def score(f, sd):
     g = 1 if sd == "CE" else -1
     parts = {"trend": 20 * (g * (f["cl"] - f["s20"]) > 0) + 10 * (g * (f["s20"] - f["s50"]) > 0),
-             "volume": min(20, max(0, (f["vr"] - 1) * 20)),
+             "volume": min(20, max(0, (f["vr"] - 1) * 20)) if f.get("has_vol", True) else 10,
              "close": 20 * (f["clv"] if sd == "CE" else 1 - f["clv"]),
              "coil": 15 * max(0, min(1, (2.2 - f["comp"]) / 1.2)),
              "avwap": 15 * (g * (f["cl"] - f["aw"]) / f["aw"] * 100 > .5)}
@@ -102,7 +104,8 @@ def targets(entry_spot, sl, sd):
     R = abs(entry_spot - sl); g = 1 if sd == "CE" else -1
     return [entry_spot + g * k * R for k in (1, 2, 3)], R
 
-def build_watchlist(candles, lots, min_score=60, top_per_side=10, trend_filter=True):
+def build_watchlist(candles, lots, min_score=60, top_per_side=10, trend_filter=True, always=()):
+    """`always` (the indices) keep their place even if stocks score higher."""
     out = []
     for s, c in candles.items():
         if s not in lots: continue
@@ -116,7 +119,10 @@ def build_watchlist(candles, lots, min_score=60, top_per_side=10, trend_filter=T
         out.append(dict(sym=s, side=sd, score=round(sc, 1), parts={k: round(v, 1) for k, v in parts.items()}, trig=trig, sl=sl,
                         planR=abs(trig - sl), f=f, lot=lots[s]))
     out.sort(key=lambda x: -x["score"])
-    return [x for x in out if x["side"] == "CE"][:top_per_side] + [x for x in out if x["side"] == "PE"][:top_per_side]
+    picked = [x for x in out if x["side"] == "CE"][:top_per_side] + [x for x in out if x["side"] == "PE"][:top_per_side]
+    ids = {id(x) for x in picked}
+    picked += [x for x in out if x["sym"] in always and id(x) not in ids]
+    return picked
 
 def exit_plan(lots):
     """How many lots leave at T1, T2, T3."""
