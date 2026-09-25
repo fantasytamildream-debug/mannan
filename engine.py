@@ -94,6 +94,8 @@ class Engine:
         return e
 
     # ------------------------------------------------------------------ day setup
+    INDEXES = ("NIFTY", "BANKNIFTY", "FINNIFTY")
+
     def new_day(self, now):
         today = now.date(); self.day = today
         hist = {s: [b for b in c if b[0] < today.isoformat()] for s, c in self.candles.items()}
@@ -101,7 +103,7 @@ class Engine:
         if f.exists():
             saved = json.loads(f.read_text()); self.calls = saved["calls"]; self.bars = {}
             print("Engine: restored", len(self.calls), "calls for", today, flush=True); return
-        wl = S.build_watchlist(hist, self.lots, self.min_score, self.top)
+        wl = S.build_watchlist(hist, self.lots, self.min_score, self.top, always=self.INDEXES)
         self.calls, self.bars = {}, {}
         for w in wl:
             cid = f"{today:%y%m%d}-{w['sym']}-{w['side']}"
@@ -169,7 +171,7 @@ class Engine:
             if c.get("orb") is None and (closed["start"] == "09:15" or self.ignore_hours): c["orb"] = [closed["h"], closed["l"]]
         m = self.mins(now)
         el = max(15, (m - (9 * 60 + 15))) / 375 if not self.ignore_hours else 0.5
-        c["rvol"] = round((sq.get("volume") or 0) / max(1, c["f"]["vavg"] * el), 2)
+        c["rvol"] = round((sq.get("volume") or 0) / max(1, c["f"]["vavg"] * el), 2) if c["f"].get("vavg") else None
         if c["status"] in PRE:
             hi, lo = bar["h"], bar["l"]
             if (lo <= c["sl"]) if ce else (hi >= c["sl"]):
@@ -204,8 +206,9 @@ class Engine:
         late = g * (bar["c"] - c["trig"]) > 0.5 * c["planR"]
         chk("stock", "Entry not late", not late, f"{abs(bar['c'] - c['trig']) / c['planR']:.2f}R past trigger (limit 0.5R)", "Too late, move already done")
         el = max(15, (m - (9 * 60 + 15))) / 375 if not self.ignore_hours else 0.5
-        pace = (sq.get("volume") or 0) / max(1, c["f"]["vavg"] * el)
-        chk("stock", "Volume above normal pace", pace >= self.vol_pace, f"{pace:.2f}x the 20-day pace (need {self.vol_pace:g}x)", "Volume too low")
+        pace = (sq.get("volume") or 0) / max(1, c["f"]["vavg"] * el) if c["f"].get("vavg") else None
+        if pace is None: chk("stock", "Volume above normal pace", True, "index: the exchange publishes no spot volume, so this check is skipped")
+        else: chk("stock", "Volume above normal pace", pace >= self.vol_pace, f"{pace:.2f}x the 20-day pace (need {self.vol_pace:g}x)", "Volume too low")
         ni = self.q.get("NIFTY"); nchg = ((ni["ltp"] / ni["prev_close"] - 1) * 100) if ni and ni.get("prev_close") else None
         if self.index_filter:
             ok = nchg is None or (nchg >= -0.15 if ce else nchg <= 0.15)
@@ -226,7 +229,7 @@ class Engine:
             chk("option", "Tradable option contract", False, why, "No tradable option")
         c["checks"] = checks
         c["orb_break"] = bool(c.get("orb") and ((bar["c"] > c["orb"][0]) if ce else (bar["c"] < c["orb"][1])))
-        c["strong"] = bool(c["parts"]["coil"] >= 7.5 and pace >= 1.5 and c.get("orb") and ((bar["c"] > c["orb"][0]) if ce else (bar["c"] < c["orb"][1])) and (nchg is None or g * nchg > 0))
+        c["strong"] = bool(c["parts"]["coil"] >= 7.5 and (pace or 0) >= 1.5 and c.get("orb") and ((bar["c"] > c["orb"][0]) if ce else (bar["c"] < c["orb"][1])) and (nchg is None or g * nchg > 0))
         failed = [x for x in checks if not x["ok"]]
         if failed:
             c["status"] = "BLOCKED"; c["reason"] = "Not taken: " + "; ".join(f"{x['fail']} ({x['detail']})" for x in failed)
