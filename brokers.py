@@ -15,6 +15,12 @@ UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.3
 
 class BrokerError(Exception): pass
 
+# Index names the terminal can trade, with the spellings Angel uses for the spot row
+INDEX_ALIASES = {"NIFTY": {"NIFTY", "NIFTY50", "NIFTY50INDEX"},
+                 "BANKNIFTY": {"BANKNIFTY", "NIFTYBANK", "BANKNIFTYINDEX"},
+                 "FINNIFTY": {"FINNIFTY", "NIFTYFINSERVICE", "NIFTYFINSERV"}}
+INDEX_FALLBACK_TOKENS = {"NIFTY": "99926000", "BANKNIFTY": "99926009", "FINNIFTY": "99926037"}
+
 def log(*a): print(datetime.now(IST).strftime("%H:%M:%S"), *a, flush=True)
 
 def http(url, body=None, headers=None, timeout=10, method=None):
@@ -96,15 +102,26 @@ class AngelOne:
         if f.exists(): m = json.loads(f.read_text())
         else:
             log("Downloading Angel One instrument master (once a day, ~40 MB)...")
-            rows = json.loads(http(self.MASTER, headers=UA, timeout=180)); m = {"eq": {}, "opt": {}}
+            rows = json.loads(http(self.MASTER, headers=UA, timeout=180)); m = {"eq": {}, "opt": {}, "idx": {}}
+            norm = lambda s: "".join(ch for ch in (s or "").upper() if ch.isalnum())
             for r in rows:
-                n = r.get("name", "")
+                n = r.get("name", ""); seg = r.get("exch_seg"); it = r.get("instrumenttype", "")
+                if seg == "NSE" and it in ("AMXIDX", "INDEX", ""):        # index spot rows
+                    for idx, names in INDEX_ALIASES.items():
+                        if norm(r.get("symbol")) in names or norm(n) in names: m["idx"][idx] = r["token"]
+                if n in INDEX_ALIASES and seg == "NFO" and it == "OPTIDX":
+                    m["opt"].setdefault(n, []).append([r["expiry"], float(r["strike"]) / 100, r["symbol"][-2:], r["token"], int(float(r.get("lotsize") or 0))])
                 if n not in self.symbols: continue
-                if r.get("exch_seg") == "NSE" and r.get("symbol") == n + "-EQ": m["eq"][n] = r["token"]
-                elif r.get("exch_seg") == "NFO" and r.get("instrumenttype") == "OPTSTK":
+                if seg == "NSE" and r.get("symbol") == n + "-EQ": m["eq"][n] = r["token"]
+                elif seg == "NFO" and it == "OPTSTK":
                     m["opt"].setdefault(n, []).append([r["expiry"], float(r["strike"]) / 100, r["symbol"][-2:], r["token"], int(float(r.get("lotsize") or 0))])
             f.write_text(json.dumps(m))
-        self.eq = m["eq"]; self.inv = {v: k for k, v in self.eq.items()}; self.inv[self.NIFTY_TOKEN] = "NIFTY"
+        self.eq = m["eq"]; self.idx = dict(INDEX_FALLBACK_TOKENS, **(m.get("idx") or {}))
+        self.inv = {v: k for k, v in self.eq.items()}
+        for k, v in self.idx.items(): self.inv[str(v)] = k
+        self.NIFTY_TOKEN = str(self.idx.get("NIFTY", self.NIFTY_TOKEN))
+        missing = [k for k in INDEX_ALIASES if k not in m.get("idx", {})]
+        if missing: log("Index tokens not found in master, using fallbacks for:", ", ".join(missing))
         pd = lambda e: datetime.strptime(e.title(), "%d%b%Y").date()
         self.opt = {s: [dict(expiry=pd(r[0]), strike=r[1], type=r[2], token=str(r[3]), lot=r[4]) for r in rows] for s, rows in m["opt"].items()}
         return f"{len(self.eq)}/{len(self.symbols)} stocks, {sum(len(v) for v in self.opt.values())} option contracts"
@@ -116,7 +133,9 @@ class AngelOne:
         return out
 
     def quotes(self, symbols=None):
-        toks = [self.eq[s] for s in (symbols or self.eq) if s in self.eq] + [self.NIFTY_TOKEN]
+        want = list(symbols or list(self.eq) + list(self.idx))
+        toks = [self.eq[s] for s in want if s in self.eq] + [str(self.idx[s]) for s in want if s in self.idx]
+        if self.NIFTY_TOKEN not in toks: toks.append(self.NIFTY_TOKEN)
         q = {}
         for v in self._quote("NSE", toks):
             s = self.inv.get(str(v.get("symbolToken")))
@@ -130,6 +149,18 @@ class AngelOne:
     def lot_of(self, sym):
         o = self.opt.get(sym) or []
         return o[0]["lot"] if o and o[0].get("lot") else None
+
+    def daily(self, token, days=90, exch="NSE"):
+        """Daily candles for the last N days: [[YYYY-MM-DD, o, h, l, c, v], ...]"""
+        end = datetime.now(IST).date(); start = end - timedelta(days=days)
+        d = self._post("/rest/secure/angelbroking/historical/v1/getCandleData",
+                       {"exchange": exch, "symboltoken": str(token), "interval": "ONE_DAY",
+                        "fromdate": f"{start} 09:15", "todate": f"{end} 15:30"})
+        out = []
+        for r in (d if isinstance(d, list) else []):
+            try: out.append([str(r[0])[:10], float(r[1]), float(r[2]), float(r[3]), float(r[4]), float(r[5] or 0)])
+            except Exception: pass
+        return out
 
     def history(self, exch, token, day, interval="FIVE_MINUTE"):
         """Intraday candles for one past day: [[datetime, o, h, l, c, v], ...]"""
@@ -210,7 +241,8 @@ class Demo:
         self.symbols, self.candles, self.state, self.bias = symbols, candles or {}, {}, watch_bias or {}
         self.vol = float(cfg.get("DEMO_VOL", "0.0006"))
     def connect(self):
-        for s in list(self.symbols) + ["NIFTY"]:
+        self.idx = {k: k for k in INDEX_ALIASES}
+        for s in list(self.symbols) + list(INDEX_ALIASES):
             c = self.candles.get(s); last = c[-1][4] if c else 25000.0
             o = last * (1 + random.gauss(0, .0015)); f = S.daily_features(c) if c else None
             self.state[s] = dict(ltp=o, open=o, high=o, low=o, prev_close=last, volume=int((f["vavg"] if f else 1e6) * random.uniform(.4, .8)), iv=max(.18, (f["hv"] if f else .2) * 1.2), vavg=(f["vavg"] if f else 1e6))
