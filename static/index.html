@@ -159,11 +159,14 @@ tr.wl td:first-child{box-shadow:inset 3px 0 var(--amber)}
  <div class="bar1"><div class="brand">KRT <b>Options</b> Terminal</div><span id="feed" class="feed disconnected">Connecting…</span>
   <div class="meta"><span id="clock"></span><span id="phase"></span><span id="nifty"></span></div>
   <div class="tools"><button class="ib" id="lang" aria-pressed="false" title="Explanation language">தமிழ்</button><button class="ib" id="snd" aria-pressed="false" title="Sound on new events">🔔 Sound</button></div></div>
- <nav class="tabs" role="tablist"><button data-t="calls" role="tab" aria-selected="true">Calls<span class="n" id="n-calls"></span></button><button data-t="hist" role="tab">History</button><button data-t="near" role="tab">Near trigger<span class="n" id="n-near"></span></button><button data-t="jack" role="tab">🔥 Jackpot Watch<span class="n" id="n-jack"></span></button><button data-t="perf" role="tab">Performance</button><button data-t="levels" role="tab">Levels</button><button data-t="rules" role="tab">Rules</button></nav>
+ <nav class="tabs" role="tablist"><button data-t="calls" role="tab" aria-selected="true">Calls<span class="n" id="n-calls"></span></button><button data-t="idx" role="tab">Index<span class="n" id="n-idx"></span></button><button data-t="hist" role="tab">History</button><button data-t="near" role="tab">Near trigger<span class="n" id="n-near"></span></button><button data-t="jack" role="tab">🔥 Jackpot Watch<span class="n" id="n-jack"></span></button><button data-t="perf" role="tab">Performance</button><button data-t="levels" role="tab">Levels</button><button data-t="rules" role="tab">Rules</button></nav>
 </header>
 <div id="alertbar" class="warnbar" hidden></div>
 <main>
  <section id="calls"><div class="strip" id="strip"></div><div id="rank"></div><div class="chips" id="chips"></div><div id="callgrid"></div></section>
+ <section id="idx" hidden>
+  <div class="panel pad"><h3>Index calls</h3><p class="note">NIFTY, BANKNIFTY, FINNIFTY and MIDCPNIFTY come from Angel's NSE feed; SENSEX and BANKEX from its BSE feed. Same rulebook as stocks — 5-minute close beyond the trigger, live option checks, ₹2,500 risk cap — except that an index has no spot volume, so that one check is skipped.</p><div id="idxstate"></div></div>
+  <div id="idxbody"></div></section>
  <section id="hist" hidden>
   <div class="panel pad"><div class="daynav"><button class="btn" id="d-prev" aria-label="Previous day">◀</button><input type="date" id="d-pick" class="s" aria-label="Pick a date"><button class="btn" id="d-next" aria-label="Next day">▶</button><button class="btn" id="d-today">Today</button><button class="btn" id="d-yest">Yesterday</button><span id="d-src"></span></div></div>
   <div class="strip" id="d-strip"></div><div id="d-body"></div></section>
@@ -320,7 +323,7 @@ function render(){tickHeader();const C=ST.calls,cnt=k=>C.filter(c=>GROUPS[k].inc
   renderRank();
   if(!L.length){$('#callgrid').innerHTML=U.filter==='active'?`<div class="empty"><b>${TA()?'இப்போது trade இல்லை':'No trade right now'}</b>${TA()?'எல்லா confirmations-ம் pass ஆன setup வந்தால் இங்கே தோன்றும்.':'A call appears here only when a 5-minute candle closes beyond a trigger and every check passes. Waiting is part of the plan.'}${cnt('near')?`<br><br><button class="btn" data-f="near">${cnt('near')} near trigger →</button>`:''}</div>`:'<div class="empty">Nothing here yet.</div>'}
   else $('#callgrid').innerHTML=`<div class="grid">${L.map(c=>c.entry?card(c):mini(c)).join('')}</div>`;
-  if(!$('#near').hidden)renderNear();if(!$('#jack').hidden)renderJack();if(!$('#levels').hidden&&!$('#lvq').matches(':focus'))renderLevels()}
+  if(!$('#idx').hidden)renderIndex();if(!$('#near').hidden)renderNear();if(!$('#jack').hidden)renderJack();if(!$('#levels').hidden&&!$('#lvq').matches(':focus'))renderLevels()}
 function card(c){const e=c.entry,L=c.levels,k=c.contract,ce=c.side==='CE',live=c.status==='ACTIVE',o=c.opt||{},p=c.pnl||{},hits=Object.fromEntries(c.hits.map(h=>[h.name,h]));
   const slHit=c.status==='CLOSED'&&/SL|stop/i.test(c.reason)&&!c.hits.length;const exitEv=c.events.filter(x=>['sl','exit'].includes(x.kind)).pop();
   const nowPx=live?(o.bid||o.ltp):null;const st=STAT[c.status];
@@ -441,6 +444,24 @@ function renderPerf(){let H=HIST.slice().reverse();if(U.pf==='strong')H=H.filter
   if(BT)$('#btnote').innerHTML=`The original package claimed ${BT.trades} trades, ${BT.win.toFixed(1)}% wins, profit factor ${BT.pf_net.toFixed(2)} and ${rs(BT.net)} net. Those numbers are <b>not proof</b>: option prices were invented, entries used that day's closing price, and when stop and target fell on the same day the target was counted. Judge the strategy on the forward calls above.`+renderPkg()}
 
 
+
+/* ---------------- index tab ---------------- */
+const INDEX_LIST=['NIFTY','BANKNIFTY','FINNIFTY','MIDCPNIFTY','SENSEX','BANKEX'];
+function renderIndex(){const st=(ST&&ST.indexes)||{};
+  $('#idxstate').innerHTML=Object.keys(st).length?`<table class="t"><tbody>${INDEX_LIST.map(k=>{const v=st[k]||st['(all)']||'not loaded by the server';return `<tr><td><b>${k}</b></td><td>${/ready/.test(v)?'✅':'✗'} ${esc(v)}</td></tr>`}).join('')}</tbody></table>`:'<p class="note">This server build has no index support yet — upload the latest server.py, brokers.py, strategy.py and engine.py.</p>';
+  const cards=[],rows=[];
+  for(const name of INDEX_LIST){
+    const c=ST.calls.find(x=>x.sym===name);
+    if(c){cards.push(c.entry?card(c):mini(c));continue}
+    const l=LV.find(x=>x.sym===name);
+    rows.push(`<div class="row"><div><span class="s ${l&&l.side==='CE'?'ce':'pe'}">${name}</span><div class="note">${l?`${l.side||'inside the value area'}${l.score!=null?' · quality '+l.score:''}`:'no data from the broker'}</div></div>
+      <div>${l&&l.trig?`<span class="pill mute">trigger ${f2(l.trig)}</span>`:''}</div>
+      <div class="num">${l?f2(l.last):'–'}<br><span class="note">${l?'last close':''}</span></div>
+      <div class="why">${l?(l.side&&l.trend&&l.score>= (ST.cfg.min_score||60)?'Qualifies, but ranked out today.':l.side?`Not on today's watchlist: ${!l.trend?'trend not aligned':'quality '+l.score+' is below '+(ST.cfg.min_score||60)}.`:'Price is inside the 3-day value area — no side, no trade.'):(st[name]||'')}</div></div>`)}
+  $('#n-idx').textContent=cards.length||'';
+  const note=`<p class="note" style="padding:0 2px 10px">Every index with a side gets a full plan here, even when its quality is below ${ST.cfg.min_score}. An entry still needs trend alignment and quality ≥ ${(ST.cfg.index_min||50)} — if it is below, the card will say so instead of turning green.</p>`;
+  $('#idxbody').innerHTML=(cards.length?note+`<div class="grid">${cards.join('')}</div>`:'')+(rows.length?`<div class="panel" style="margin-top:14px"><div class="pad"><h3>Not trading today</h3></div><div class="list" style="border:0">${rows.join('')}</div></div>`:'')}
+
 /* ---------------- history: any day, live calls or package backtest ---------------- */
 let DAYS=null,DSEL=null;
 const RES={'2':'T2 (+70%)','1':'T1 (+35%)','S':'Stop','E':'End of day'};
@@ -512,7 +533,7 @@ function callText(c){const e=c.entry,L=c.levels,k=c.contract;return `${c.strong?
 
 /* ---------------- nav & events ---------------- */
 function go(t){$$('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));$$('main>section').forEach(s=>s.hidden=s.id!==t);
-  if(!ST)return;({calls:render,hist:renderHist,near:renderNear,jack:renderJack,perf:renderPerf,levels:renderLevels,rules:renderRules})[t]()}
+  if(!ST)return;({calls:render,idx:renderIndex,hist:renderHist,near:renderNear,jack:renderJack,perf:renderPerf,levels:renderLevels,rules:renderRules})[t]()}
 document.addEventListener('click',e=>{const t=e.target.closest('nav.tabs button');if(t)return go(t.dataset.t);
   const f=e.target.closest('[data-f]');if(f){U.filter=f.dataset.f;saveU();if($('#calls').hidden)go('calls');return render()}
   const p=e.target.closest('[data-p]');if(p){U.pf=p.dataset.p;saveU();return renderPerf()}
