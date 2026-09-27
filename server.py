@@ -23,7 +23,7 @@ KEYS = ("BROKER", "ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_MPIN", "ANGEL_TOT
         "QUOTE_INTERVAL_SECONDS", "RISK_PER_TRADE", "MAX_LOTS", "MIN_SCORE", "TOP_PER_SIDE", "TARGET_DELTA", "MAX_SPREAD_PCT",
         "MIN_OPTION_VOLUME_LOTS", "VOLUME_PACE", "MIN_DTE", "INDEX_FILTER", "MAX_ACTIVE", "BAR_SECONDS", "IGNORE_MARKET_HOURS",
         "ENTRY_START", "NO_NEW_ENTRY", "SQUARE_OFF", "REPLAY", "MIN_DELTA", "ANGEL_RATE_GAP",
-        "GITHUB_REPO", "GITHUB_TOKEN", "GITHUB_BRANCH", "GITHUB_DIR", "INDEX_CALLS", "MIN_OI_LOTS")
+        "GITHUB_REPO", "GITHUB_TOKEN", "GITHUB_BRANCH", "GITHUB_DIR", "INDEX_CALLS", "MIN_OI_LOTS", "INDEX_MIN_SCORE")
 
 def load_cfg():
     cfg = {"PORT": "8765", "QUOTE_INTERVAL_SECONDS": "6"}
@@ -241,9 +241,13 @@ def main():
     elif not getattr(broker, "idx", None): BOOT["indexes"]["(all)"] = f"{broker.name} adapter has no index support"
     else:
         BOOT["status"] = "loading index history"
-        for name, tok in getattr(broker, "idx", {}).items():
+        for name in B.INDEX_ALIASES:
+            tok = getattr(broker, "idx", {}).get(name)
+            if not tok:
+                BOOT["indexes"][name] = "spot token not found in the broker's instrument list — index skipped"; log(f"Index {name}: {BOOT['indexes'][name]}"); continue
             try:
-                rows = broker.daily(tok) if hasattr(broker, "daily") else data["candles"].get(name)
+                ex = B.INDEX_EXCH.get(name, ("NSE",))[0]
+                rows = broker.daily(tok, exch=ex) if hasattr(broker, "daily") else data["candles"].get(name)
                 cons = broker.contracts(name) or []
                 if not rows or len(rows) <= 55:
                     BOOT["indexes"][name] = f"no daily history from the broker (token {tok}) — index skipped"
