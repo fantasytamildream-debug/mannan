@@ -29,7 +29,7 @@ class Engine:
         self.risk_limit = g("RISK_PER_TRADE", 2500.0); self.max_lots = g("MAX_LOTS", 1); self.min_score = g("MIN_SCORE", 60.0)
         self.top = g("TOP_PER_SIDE", 10); self.tdelta = g("TARGET_DELTA", 0.45); self.max_spread = g("MAX_SPREAD_PCT", 3.0)
         self.min_delta = g("MIN_DELTA", 0.22); self.min_opt_lots = g("MIN_OPTION_VOLUME_LOTS", 20.0); self.min_oi_lots = g("MIN_OI_LOTS", 300.0); self.vol_pace = g("VOLUME_PACE", 1.0); self.min_dte = g("MIN_DTE", 3)
-        self.index_filter = cfg.get("INDEX_FILTER", "1") == "1"; self.max_active = g("MAX_ACTIVE", 4)
+        self.index_min = g("INDEX_MIN_SCORE", 50.0); self.index_filter = cfg.get("INDEX_FILTER", "1") == "1"; self.max_active = g("MAX_ACTIVE", 4)
         self.bar_s = g("BAR_SECONDS", 300); self.ignore_hours = cfg.get("IGNORE_MARKET_HOURS", "0") == "1"
         self.t_entry, self.t_cut, self.t_sq = hm(cfg.get("ENTRY_START", "09:25")), hm(cfg.get("NO_NEW_ENTRY", "15:00")), hm(cfg.get("SQUARE_OFF", "15:15"))
         self.lock = threading.RLock(); self.day = None; self.calls = {}; self.bars = {}; self.q = {}; self.optq = {}
@@ -96,7 +96,7 @@ class Engine:
         return e
 
     # ------------------------------------------------------------------ day setup
-    INDEXES = ("NIFTY", "BANKNIFTY", "FINNIFTY")
+    INDEXES = ("NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX", "BANKEX")
 
     def new_day(self, now):
         today = now.date(); self.day = today
@@ -110,6 +110,7 @@ class Engine:
         for w in wl:
             cid = f"{today:%y%m%d}-{w['sym']}-{w['side']}"
             self.calls[cid] = dict(id=cid, day=today.isoformat(), sym=w["sym"], side=w["side"], score=w["score"], parts=w["parts"],
+                                   is_index=w.get("index", False), trend_ok=w.get("trend", True),
                                    trig=w["trig"], sl=w["sl"], planR=w["planR"], lot=w["lot"], f={k: w["f"][k] for k in ("vah", "val", "aw", "atr", "cl", "pdh", "pdl", "h3", "l3", "hv", "vavg", "comp", "date")},
                                    src=self.source, plan=None, status="WATCHING", reason="Waiting for the market", checks=[], events=[], strong=False, contract=None, fills=[],
                                    entry=None, levels=None, stop=None, lots=0, open_lots=0, hits=[], spot=None, opt=None, pnl=None, spark=[], ospark=[])
@@ -205,6 +206,9 @@ class Engine:
         if m < self.t_entry:
             c["status"], c["reason"] = "BLOCKED", f"Candle closed beyond trigger before {self.cfg.get('ENTRY_START','09:25')}; waiting for the next one"; return
         chk("stock", "Candle close beyond trigger", True, f"{bar['start']} candle closed {f2(bar['c'])} vs trigger {f2(c['trig'])}")
+        chk("stock", "Trend aligned", c.get("trend_ok", True), "price vs its 20- and 50-day averages", "Trend not aligned")
+        floor = self.index_min if c.get("is_index") else self.min_score
+        chk("stock", f"Quality ≥ {floor:g}", c["score"] >= floor, f"quality {c['score']:.0f}/100", f"Quality below {floor:g}")
         late = g * (bar["c"] - c["trig"]) > 0.5 * c["planR"]
         chk("stock", "Entry not late", not late, f"{abs(bar['c'] - c['trig']) / c['planR']:.2f}R past trigger (limit 0.5R)", "Too late, move already done")
         el = max(15, (m - (9 * 60 + 15))) / 375 if not self.ignore_hours else 0.5
@@ -388,7 +392,7 @@ class Engine:
             ni = self.q.get("NIFTY")
             return dict(now=now.isoformat(), day=str(self.day), feed=dict(self.feed, health=st, poll_age=poll_age), market_open=self.market_open(now),
                         nifty=dict(ltp=ni["ltp"], chg=(ni["ltp"] / ni["prev_close"] - 1) * 100 if ni.get("prev_close") else None) if ni else None,
-                        cfg=dict(risk=self.risk_limit, max_lots=self.max_lots, min_score=self.min_score, spread=self.max_spread, bar=self.bar_s // 60,
+                        cfg=dict(risk=self.risk_limit, max_lots=self.max_lots, min_score=self.min_score, index_min=self.index_min, spread=self.max_spread, bar=self.bar_s // 60,
                                  entry=self.cfg.get("ENTRY_START", "09:25"), cut=self.cfg.get("NO_NEW_ENTRY", "15:00"), sq=self.cfg.get("SQUARE_OFF", "15:15"),
                                  vol_pace=self.vol_pace, min_opt_lots=self.min_opt_lots, delta=self.tdelta),
                         calls=list(self.calls.values()))
