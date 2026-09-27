@@ -112,12 +112,15 @@ def build_watchlist(candles, lots, min_score=60, top_per_side=10, trend_filter=T
         f = daily_features(c)
         if not f or f["cl"] < 50: continue
         sd = side_of(f)
-        if not sd or (trend_filter and not trend_ok(f, sd)): continue
+        if not sd: continue
+        keep = s in always                      # indices always get a plan, even if they rank low
+        tr = trend_ok(f, sd)
+        if not keep and trend_filter and not tr: continue
         sc, parts = score(f, sd)
-        if sc < min_score: continue
+        if not keep and sc < min_score: continue
         trig, sl = spot_plan(f, sd)
         out.append(dict(sym=s, side=sd, score=round(sc, 1), parts={k: round(v, 1) for k, v in parts.items()}, trig=trig, sl=sl,
-                        planR=abs(trig - sl), f=f, lot=lots[s]))
+                        planR=abs(trig - sl), f=f, lot=lots[s], trend=tr, index=s in always))
     out.sort(key=lambda x: -x["score"])
     picked = [x for x in out if x["side"] == "CE"][:top_per_side] + [x for x in out if x["side"] == "PE"][:top_per_side]
     ids = {id(x) for x in picked}
