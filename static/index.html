@@ -175,7 +175,7 @@ tr.wl td:first-child{box-shadow:inset 3px 0 var(--amber)}
  <section id="perf" hidden>
   <div class="panel pad"><h3>Forward calls (recorded live by this terminal)</h3><p class="note" id="perf-note"></p><div class="strip" id="perfstrip"></div>
    <div class="chips" id="perfchips"><button class="chip" data-p="all" aria-pressed="true">All calls</button><button class="chip" data-p="strong" aria-pressed="false">🔥 only</button><button class="chip" data-p="live" aria-pressed="false">Live only</button><button class="chip" data-p="replay" aria-pressed="false">Replay only</button><button class="chip" data-p="mine" aria-pressed="false">Trades I took</button></div>
-   <div id="perfextra"></div><div class="scroll"><table class="t" id="histtbl"></table></div></div>
+   <div id="perfextra"></div><div id="lab"></div><div class="scroll"><table class="t" id="histtbl"></table></div></div>
   <div class="panel pad"><h3>Old package history (zip, 2021 – 16 Sep 2026) <span class="pill bad">Unverified</span></h3><div class="note" id="btnote"></div></div>
  </section>
  <section id="levels" hidden><div class="panel"><div class="pad" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><h3 style="margin:0" id="lvtitle">Levels for today</h3><input class="s" id="lvq" placeholder="Search symbol" aria-label="Search symbol"><span class="note" id="lvnote"></span></div><div class="pad" style="padding-top:0"><details><summary class="note" style="cursor:pointer"><b>What do these columns mean?</b></summary><div class="lvhelp">
@@ -222,6 +222,7 @@ function tickHeader(){const now=new Date(Date.now()+OFF),ist=new Date(now.getTim
   feed(since,since==='live'?`Live · ${br} · ${age}s ago`:since==='delayed'?`Delayed · ${br} · ${age}s old`:fd.error?'Disconnected · '+fd.error:'Disconnected');
   const m=ist.getHours()*60+ist.getMinutes(),wd=ist.getDay()>0&&ist.getDay()<6,c=ST.cfg;
   $('#phase').textContent=ST.market_open?(m<toM(c.entry)?'Opening · entries from '+c.entry:m<toM(c.cut)?'Market open · entries allowed':m<toM(c.sq)?'No new entries after '+c.cut:'Square-off '+c.sq):(wd&&m<555?'Pre-open':'Market closed');
+  if(ST.coverage!=null&&ST.market_open)$('#phase').textContent+=` · feed ${ST.coverage}% of session`;
   $('#nifty').innerHTML=ST.nifty?`NIFTY <b>${f2(ST.nifty.ltp)}</b> <span class="${ST.nifty.chg>=0?'up':'dn'}">${ST.nifty.chg==null?'':(ST.nifty.chg>=0?'+':'')+ST.nifty.chg.toFixed(2)+'%'}</span>`:''}
 const toM=s=>{const[a,b]=s.split(':');return +a*60+ +b};
 
@@ -347,7 +348,7 @@ function checksHTML(c){if(!c.checks||!c.checks.length)return'';const g=n=>c.chec
 function mini(c){const ce=c.side==='CE',st=STAT[c.status],d=c.spot?Math.abs(c.trig-c.spot):null;
   return `<article class="card ${ce?'ce':'pe'}"><div class="ch"><div><h2>${c.plan?esc(c.plan.name):c.sym+' '+c.side}</h2><div class="sub">${c.side==='CE'?'BUY CALL':'BUY PUT'} setup · trigger ${f2(c.trig)} · stop ${f2(c.sl)} · spot ${f2(c.spot)} · quality ${c.score.toFixed(0)}/100</div></div><div class="right">${idxTag(c)}${rvolTag(c)}<span class="pill ${st[1]}">${TA()?TAST[c.status]:st[0]}</span></div></div>
    ${lightBar(c)}${c.plan?roadmap(c):''}
-   ${['WATCHING','NEAR','BREAKOUT','BLOCKED'].includes(c.status)?track(c)+planBox(c):''}
+   ${['WATCHING','NEAR','BREAKOUT','BLOCKED','INVALID','EXPIRED'].includes(c.status)?track(c)+planBox(c):''}
    <details class="more"><summary>${TA()?'ஏன்? · checks & quality':'Why this setup? · checks & quality'}</summary>
    <div class="explain"><span class="lab">${TA()?'நிலை':'Status'}</span>${esc(explain(c))}</div>${checksHTML(c)}${qualityHTML(c)}</details></article>`}
 function spark(pts,lines){const v=pts.map(p=>+p[1]),all=v.concat(lines),mn=Math.min(...all),mx=Math.max(...all),W=300,H=60,x=i=>i/(v.length-1||1)*W,y=a=>H-4-(a-mn)/((mx-mn)||1)*(H-8);
@@ -422,15 +423,22 @@ function renderJack(){const ORD={ACTIVE:0,CLOSED:1,BREAKOUT:2,NEAR:3,BLOCKED:4,W
    const ck=(ok,t)=>`<div class="ck ${ok?'':'no'}">${t}</div>`,pace=(c.checks||[]).find(x=>x.name.startsWith('Volume'));
    const five=[true,(c.rvol||0)>=1.5,!!c.orb_break,!!(ST.nifty&&(c.side==='CE'?ST.nifty.chg>0:ST.nifty.chg<0)),!(c.checks||[]).some(x=>x.name==='Room to T1'&&!x.ok)],np=five.filter(Boolean).length;
    if(c.entry)return card(c).replace('<div class="ladder">',`<div class="pad" style="padding-bottom:0"><div class="flow">${flow}</div></div><div class="ladder">`);
-   return `<article class="card ${c.side.toLowerCase()}"><div class="ch"><div><h2>${c.strong?'🔥 ':''}${c.plan?esc(c.plan.name):c.sym+' '+c.side}</h2><div class="sub">${c.side==='CE'?'BUY CALL':'BUY PUT'} setup · trigger ${f2(c.trig)} · quality ${c.score.toFixed(0)}/100</div></div></div>${lightBar(c)}${c.plan?roadmap(c):''}${['WATCHING','NEAR','BREAKOUT','BLOCKED'].includes(c.status)?track(c)+planBox(c):''}<div class="pad" style="padding-top:0"><div class="flow">${flow}</div>
+   return `<article class="card ${c.side.toLowerCase()}"><div class="ch"><div><h2>${c.strong?'🔥 ':''}${c.plan?esc(c.plan.name):c.sym+' '+c.side}</h2><div class="sub">${c.side==='CE'?'BUY CALL':'BUY PUT'} setup · trigger ${f2(c.trig)} · quality ${c.score.toFixed(0)}/100</div></div></div>${lightBar(c)}${c.plan?roadmap(c):''}${['WATCHING','NEAR','BREAKOUT','BLOCKED','INVALID','EXPIRED'].includes(c.status)?track(c)+planBox(c):''}<div class="pad" style="padding-top:0"><div class="flow">${flow}</div>
     <div class="five ${np===5?'full':''}">${np===5?'🔥 5/5 CONFIRMED':np+'/5 ready'}</div>
     <div class="jc">${ck(true,'Tight 3-day coil')}${ck((c.rvol||0)>=1.5,'Volume ≥1.5× pace'+(c.rvol?' ('+c.rvol.toFixed(1)+'×)':''))}${ck(c.orb_break,'First-5-min range break')}${ck(ST.nifty&&(c.side==='CE'?ST.nifty.chg>0:ST.nifty.chg<0),'NIFTY same direction')}${ck(!(c.checks||[]).some(x=>x.name==='Room to T1'&&!x.ok),'Room to T1')}</div>
     <p class="note" style="margin:8px 0 0">${esc(explain(c))}</p></div></article>`}).join(''):'<div class="empty">No coiled setups in today\'s watchlist.</div>'}
 
 /* ---------------- performance ---------------- */
-function renderPerf(){let H=HIST.slice().reverse();if(U.pf==='strong')H=H.filter(h=>h.strong);if(U.pf==='mine')H=H.filter(h=>MINE[h.id]);if(U.pf==='live')H=H.filter(h=>h.src!=='replay');if(U.pf==='replay')H=H.filter(h=>h.src==='replay');
+function renderPerf(){let H=HIST.slice().reverse().filter(x=>x.kind!=='skipped');if(U.pf==='strong')H=H.filter(h=>h.strong);if(U.pf==='mine')H=H.filter(h=>MINE[h.id]);if(U.pf==='live')H=H.filter(h=>h.src!=='replay');if(U.pf==='replay')H=H.filter(h=>h.src==='replay');
   const w=H.filter(h=>h.pnl>0),l=H.filter(h=>h.pnl<=0),net=H.reduce((a,h)=>a+h.pnl,0),aw=w.length?w.reduce((a,h)=>a+h.pnl,0)/w.length:0,al=l.length?l.reduce((a,h)=>a+h.pnl,0)/l.length:0;
   let eq=0,pk=0,dd=0;for(const h of HIST.filter(x=>H.includes(x))){eq+=h.pnl;pk=Math.max(pk,eq);dd=Math.max(dd,pk-eq)}
+  const taken=H.filter(x=>x.kind!=='skipped'),skip=HIST.filter(x=>x.kind==='skipped');
+  const hitT1=a=>a.length?(a.filter(x=>(x.hits||[]).includes('T1')).length/a.length*100).toFixed(0)+'%':'–';
+  const why={};for(const x of skip)for(const b of (x.blocked_by||[]))why[b]=(why[b]||0)+1;
+  $('#lab').innerHTML=skip.length?`<div class="pad"><h3>Did the filters help?</h3>
+   <p class="note">Every setup a check blocked is still followed with the same levels — no money, just a record. If the skipped ones reach T1 far more often than the taken ones, a filter is too strict.</p>
+   <div class="strip">${[['Calls taken',taken.length],['Taken → T1',hitT1(taken)],['Skipped by filters',skip.length],['Skipped → T1',hitT1(skip)]].map(([a,b])=>`<div><small>${a}</small><b>${b}</b></div>`).join('')}</div>
+   <p class="note" style="margin-top:8px">Most common blocks: ${Object.entries(why).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,v])=>`${esc(k)} (${v})`).join(' · ')||'–'}</p></div>`:'';
   $('#perf-note').innerHTML=H.length<30?`<b>${H.length} call${H.length===1?'':'s'} so far.</b> Under 30 calls the numbers are mostly luck; don't judge the strategy yet.`:'Every call below was decided live at a candle close, with live option prices. Nothing uses information from after the call.';
   $('#perfstrip').innerHTML=[['Calls',H.length],['Win rate',H.length?(w.length/H.length*100).toFixed(1)+'%':'–'],['Avg win',rs(aw)],['Avg loss',rs(al)],['Expectancy / call',H.length?rs(net/H.length):'–'],['Net',rs(net)],['Max drawdown',rs(-dd)]].map(([a,b])=>`<div><small>${a}</small><b>${b}</b></div>`).join('');
   $$('#perfchips .chip').forEach(b=>b.setAttribute('aria-pressed',b.dataset.p===U.pf));
