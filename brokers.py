@@ -70,6 +70,7 @@ class AngelOne:
             raise BrokerError("Add ANGEL_API_KEY, ANGEL_CLIENT_CODE, ANGEL_MPIN, ANGEL_TOTP_SECRET")
         self.symbols, self.cache, self.jwt, self.login_day = symbols, cache, None, None
         self.gate = RateGate(float(cfg.get("ANGEL_RATE_GAP", 1.1)))
+        self.hist_gate = RateGate(float(cfg.get("ANGEL_HIST_GAP", 2.5)))   # history API is rate-limited harder
 
     def _h(self):
         h = {"Content-Type": "application/json", "Accept": "application/json", "X-UserType": "USER", "X-SourceID": "WEB",
@@ -165,11 +166,22 @@ class AngelOne:
         o = self.opt.get(sym) or []
         return o[0]["lot"] if o and o[0].get("lot") else None
 
+    def _hist(self, body, tries=3):
+        """History requests: slow lane, and wait properly when Angel says 'too many requests'."""
+        for i in range(tries):
+            self.hist_gate.wait()
+            try: return self._post("/rest/secure/angelbroking/historical/v1/getCandleData", body, retry=False)
+            except (BrokerError, urllib.error.HTTPError) as e:
+                msg = str(e)
+                if ("403" in msg or "AB1021" in msg or "rate" in msg.lower() or "too many" in msg.lower()) and i < tries - 1:
+                    time.sleep(20 + 10 * i); continue
+                raise
+        return []
+
     def daily(self, token, days=90, exch="NSE"):   # exch is "NSE" or "BSE" for index spot
         """Daily candles for the last N days: [[YYYY-MM-DD, o, h, l, c, v], ...]"""
         end = datetime.now(IST).date(); start = end - timedelta(days=days)
-        d = self._post("/rest/secure/angelbroking/historical/v1/getCandleData",
-                       {"exchange": exch, "symboltoken": str(token), "interval": "ONE_DAY",
+        d = self._hist({"exchange": exch, "symboltoken": str(token), "interval": "ONE_DAY",
                         "fromdate": f"{start} 09:15", "todate": f"{end} 15:30"})
         out = []
         for r in (d if isinstance(d, list) else []):
@@ -179,8 +191,8 @@ class AngelOne:
 
     def history(self, exch, token, day, interval="FIVE_MINUTE"):
         """Intraday candles for one past day: [[datetime, o, h, l, c, v], ...]"""
-        d = self._post("/rest/secure/angelbroking/historical/v1/getCandleData",
-                       {"exchange": exch, "symboltoken": str(token), "interval": interval, "fromdate": f"{day} 09:15", "todate": f"{day} 15:30"})
+        d = self._hist({"exchange": exch, "symboltoken": str(token), "interval": interval,
+                        "fromdate": f"{day} 09:15", "todate": f"{day} 15:30"})
         out = []
         for r in (d if isinstance(d, list) else []):
             try: out.append([datetime.fromisoformat(r[0]).astimezone(IST), float(r[1]), float(r[2]), float(r[3]), float(r[4]), float(r[5])])
