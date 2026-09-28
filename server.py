@@ -243,20 +243,26 @@ def main():
     eng = Engine(cfg, broker, candles, {s: data["lots"][s] for s in symbols}, cache, notify)
     eng.on_file = store.queue
     # ---- index universe (NIFTY / BANKNIFTY / FINNIFTY): daily candles from the broker, lots from its contract list
-    def index_daily(name, tok, ex):
+    def index_daily(name, tok, ex, alt=None):
         """Angel's ONE_DAY history works for some indices and not others. Try it; if it comes back empty,
         fall back to the daily candles shipped with the terminal, topped up from 5-minute history."""
         how = []
-        try:
-            rows = broker.daily(tok, exch=ex) if hasattr(broker, "daily") else []
-            if rows and len(rows) > 55: return rows, f"broker daily history ({len(rows)} candles)"
-            how.append(f"daily history returned {len(rows or [])} candles")
-        except Exception as e: how.append(f"daily history error: {e}")
+        cf = cache / f"idx_{name}_{datetime.now(IST):%Y%m%d}.json"
+        if cf.exists():
+            try: return json.loads(cf.read_text()), "cached earlier today"
+            except Exception: pass
+        for t in [tok] + ([alt] if alt and str(alt) != str(tok) else []):
+            try:
+                rows = broker.daily(t, exch=ex) if hasattr(broker, "daily") else []
+                if rows and len(rows) > 55:
+                    cf.write_text(json.dumps(rows)); return rows, f"broker daily history, token {t} ({len(rows)} candles)"
+                how.append(f"token {t}: {len(rows or [])} candles")
+            except Exception as e: how.append(f"token {t}: {e}")
         base = list(data["candles"].get(name) or [])
         if not base: return None, "; ".join(how) + "; no packaged history either"
         have = {r[0] for r in base}; today = datetime.now(IST).date()
         d = datetime.strptime(max(have), "%Y-%m-%d").date() + timedelta(days=1); built = 0
-        while d <= today and built < 25:
+        while d <= today and built < 8:
             if d.weekday() < 5 and not (d == today and datetime.now(IST).hour < 16):
                 try:
                     bars = broker.history(ex, tok, d.isoformat()) if hasattr(broker, "history") else []
@@ -265,22 +271,23 @@ def main():
                 except Exception as e: how.append(f"{d}: {e}")
             d += timedelta(days=1)
         base.sort(key=lambda r: r[0]); last = base[-1][0]
+        if built: cf.write_text(json.dumps(base))
         if (today - datetime.strptime(last, "%Y-%m-%d").date()).days > 4:
             return None, "; ".join(how) + f"; packaged history only reaches {last}, too stale to trade"
         return base, f"packaged history + {built} session(s) rebuilt from 5-min data, latest {last}"
 
     BOOT["indexes"] = {}
-    if cfg.get("INDEX_CALLS", "1") != "1": BOOT["indexes"]["(all)"] = "switched off (INDEX_CALLS=0)"
-    elif not getattr(broker, "idx", None): BOOT["indexes"]["(all)"] = f"{broker.name} adapter has no index support"
-    else:
-        BOOT["status"] = "loading index history"
+    def load_indexes():
+      if cfg.get("INDEX_CALLS", "1") != "1": BOOT["indexes"]["(all)"] = "switched off (INDEX_CALLS=0)"
+      elif not getattr(broker, "idx", None): BOOT["indexes"]["(all)"] = f"{broker.name} adapter has no index support"
+      else:
         for name in B.INDEX_ALIASES:
             tok = getattr(broker, "idx", {}).get(name)
             if not tok:
                 BOOT["indexes"][name] = "spot token not found in the broker's instrument list — index skipped"; log(f"Index {name}: {BOOT['indexes'][name]}"); continue
             try:
                 ex = B.INDEX_EXCH.get(name, ("NSE",))[0]
-                rows, how = index_daily(name, tok, ex)
+                rows, how = index_daily(name, tok, ex, B.INDEX_FALLBACK_TOKENS.get(name))
                 cons = broker.contracts(name) or []
                 if not rows or len(rows) <= 55:
                     BOOT["indexes"][name] = f"no usable daily history (token {tok}, {ex}): {how}"
@@ -294,6 +301,11 @@ def main():
                 log(f"Index {name}: {BOOT['indexes'][name]}")
             except Exception as e:
                 BOOT["indexes"][name] = f"error: {e}"; log(f"Index {name}: {e}")
+      done = [n for n, v in BOOT["indexes"].items() if str(v).startswith("ready")]
+      if done:
+          eng.lots = {s: data["lots"][s] for s in symbols if s in data["lots"]}
+          with eng.lock: eng.day = None          # rebuild today's watchlist now that the indices are in
+          log("Indexes ready:", ", ".join(done))
     last_lots = {s: data["lots"][s] for s in symbols if s in data["lots"]}
     if hasattr(broker, "lot_of"):                       # real lot sizes from the broker's contract list
         for s in symbols:
@@ -309,6 +321,7 @@ def main():
                                 note="Package backtest, NOT verified: synthetic option prices, same-day close used for entry, targets checked before stops.",
                                 rows=T)}
     statics.update(statics_extra)
+    threading.Thread(target=load_indexes, daemon=True).start()
     BOOT["statics"] = statics; BOOT["eng"] = eng; BOOT["status"] = "ready"; log("Ready.")
     interval = float(cfg["QUOTE_INTERVAL_SECONDS"])
     def loop():
@@ -338,7 +351,7 @@ def main():
     def replays():
         if not hasattr(broker, "history") or cfg.get("REPLAY", "1") != "1":
             statics["replay"] = "not available for this broker"; return
-        time.sleep(20); now = datetime.now(IST)
+        time.sleep(90); now = datetime.now(IST)
         first = datetime.strptime(max(statics["bt_days"]), "%Y-%m-%d").date() + timedelta(days=1)
         last = now.date() - timedelta(days=1); first = max(first, last - timedelta(days=45))
         todo = RP.missing_days(first, last, cache)
