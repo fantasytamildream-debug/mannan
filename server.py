@@ -23,7 +23,7 @@ KEYS = ("BROKER", "ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_MPIN", "ANGEL_TOT
         "QUOTE_INTERVAL_SECONDS", "RISK_PER_TRADE", "MAX_LOTS", "MIN_SCORE", "TOP_PER_SIDE", "TARGET_DELTA", "MAX_SPREAD_PCT",
         "MIN_OPTION_VOLUME_LOTS", "VOLUME_PACE", "MIN_DTE", "INDEX_FILTER", "MAX_ACTIVE", "BAR_SECONDS", "IGNORE_MARKET_HOURS",
         "ENTRY_START", "NO_NEW_ENTRY", "SQUARE_OFF", "REPLAY", "MIN_DELTA", "ANGEL_RATE_GAP",
-        "GITHUB_REPO", "GITHUB_TOKEN", "GITHUB_BRANCH", "GITHUB_DIR", "INDEX_CALLS", "MIN_OI_LOTS", "INDEX_MIN_SCORE")
+        "GITHUB_REPO", "GITHUB_TOKEN", "GITHUB_BRANCH", "GITHUB_DIR", "INDEX_CALLS", "MIN_OI_LOTS", "INDEX_MIN_SCORE", "PUBLIC_URL", "ALERT_NEAR")
 
 def load_cfg():
     cfg = {"PORT": "8765", "QUOTE_INTERVAL_SECONDS": "6"}
@@ -229,13 +229,46 @@ def main():
         while True: time.sleep(3600)
     tg = Telegram(cfg)
     def notify(c, kind, e):
-        if kind == "entry": tg.send(f"{c['id']}|entry", call_text(c))
+        if kind == "near":
+            if cfg.get("ALERT_NEAR", "1") != "1": return
+            p = c.get("plan") or {}
+            tg.send(f"{c['id']}|near", f"👀 {c['sym']} {c['side']} · spot crossed the trigger {c['trig']:,.2f}\n"
+                                       f"Planned {p.get('name','')} — do NOT buy yet, the 5-min candle must close beyond it")
+        elif kind == "invalid":
+            tg.send(f"{c['id']}|invalid", f"🚫 {c['sym']} {c['side']} cancelled — {e['text']}. No trade in this one today.")
+        elif kind == "entry": tg.send(f"{c['id']}|entry", call_text(c))
         else:
             p = c.get("pnl") or {}; tg.send(f"{c['id']}|{kind}|{e['t']}" if kind == "exit" else f"{c['id']}|{kind}",
                     f"{'✅' if kind.startswith('t') else '⛔' if kind in ('sl',) else '🔚'} {c['contract']['name']}\n{e['text']} at {e['t']} IST\nNet so far ≈ ₹{p.get('net', 0):,.0f}")
     eng = Engine(cfg, broker, candles, {s: data["lots"][s] for s in symbols}, cache, notify)
     eng.on_file = store.queue
     # ---- index universe (NIFTY / BANKNIFTY / FINNIFTY): daily candles from the broker, lots from its contract list
+    def index_daily(name, tok, ex):
+        """Angel's ONE_DAY history works for some indices and not others. Try it; if it comes back empty,
+        fall back to the daily candles shipped with the terminal, topped up from 5-minute history."""
+        how = []
+        try:
+            rows = broker.daily(tok, exch=ex) if hasattr(broker, "daily") else []
+            if rows and len(rows) > 55: return rows, f"broker daily history ({len(rows)} candles)"
+            how.append(f"daily history returned {len(rows or [])} candles")
+        except Exception as e: how.append(f"daily history error: {e}")
+        base = list(data["candles"].get(name) or [])
+        if not base: return None, "; ".join(how) + "; no packaged history either"
+        have = {r[0] for r in base}; today = datetime.now(IST).date()
+        d = datetime.strptime(max(have), "%Y-%m-%d").date() + timedelta(days=1); built = 0
+        while d <= today and built < 25:
+            if d.weekday() < 5 and not (d == today and datetime.now(IST).hour < 16):
+                try:
+                    bars = broker.history(ex, tok, d.isoformat()) if hasattr(broker, "history") else []
+                    if bars:
+                        base.append([d.isoformat(), bars[0][1], max(b[2] for b in bars), min(b[3] for b in bars), bars[-1][4], sum(b[5] for b in bars)]); built += 1
+                except Exception as e: how.append(f"{d}: {e}")
+            d += timedelta(days=1)
+        base.sort(key=lambda r: r[0]); last = base[-1][0]
+        if (today - datetime.strptime(last, "%Y-%m-%d").date()).days > 4:
+            return None, "; ".join(how) + f"; packaged history only reaches {last}, too stale to trade"
+        return base, f"packaged history + {built} session(s) rebuilt from 5-min data, latest {last}"
+
     BOOT["indexes"] = {}
     if cfg.get("INDEX_CALLS", "1") != "1": BOOT["indexes"]["(all)"] = "switched off (INDEX_CALLS=0)"
     elif not getattr(broker, "idx", None): BOOT["indexes"]["(all)"] = f"{broker.name} adapter has no index support"
@@ -247,17 +280,17 @@ def main():
                 BOOT["indexes"][name] = "spot token not found in the broker's instrument list — index skipped"; log(f"Index {name}: {BOOT['indexes'][name]}"); continue
             try:
                 ex = B.INDEX_EXCH.get(name, ("NSE",))[0]
-                rows = broker.daily(tok, exch=ex) if hasattr(broker, "daily") else data["candles"].get(name)
+                rows, how = index_daily(name, tok, ex)
                 cons = broker.contracts(name) or []
                 if not rows or len(rows) <= 55:
-                    BOOT["indexes"][name] = f"no daily history from the broker (token {tok}) — index skipped"
+                    BOOT["indexes"][name] = f"no usable daily history (token {tok}, {ex}): {how}"
                 elif not cons:
                     BOOT["indexes"][name] = "no option contracts in the broker's list — index skipped"
                 else:
                     candles[name] = rows; symbols.add(name)
                     lot = cons[0].get("lot") or 0
                     if lot: data["lots"][name] = lot
-                    BOOT["indexes"][name] = f"ready · {len(rows)} daily candles · {len(cons)} contracts · lot {data['lots'].get(name, '?')}"
+                    BOOT["indexes"][name] = f"ready · {len(rows)} daily candles · {len(cons)} contracts · lot {data['lots'].get(name, '?')} · {how}"
                 log(f"Index {name}: {BOOT['indexes'][name]}")
             except Exception as e:
                 BOOT["indexes"][name] = f"error: {e}"; log(f"Index {name}: {e}")
@@ -316,6 +349,36 @@ def main():
             time.sleep(3)
         statics["replay"] = f"done ({len(todo)} day{'s' if len(todo) != 1 else ''})"
     threading.Thread(target=replays, daemon=True).start()
+    def self_ping():
+        url = (cfg.get("PUBLIC_URL") or "").rstrip("/")
+        if not url: return
+        while True:
+            now = datetime.now(IST)
+            if now.weekday() < 5 and 9 * 60 <= now.hour * 60 + now.minute <= 15 * 40:
+                try: B.http(url + "/ping", headers={"User-Agent": "krt-keepalive"}, timeout=15)
+                except Exception as e: log("self-ping failed:", e)
+            time.sleep(600)
+    threading.Thread(target=self_ping, daemon=True).start()
+
+    def daily_digest():
+        sent = set()
+        while True:
+            now = datetime.now(IST); key = str(now.date())
+            if now.weekday() < 5 and now.hour * 60 + now.minute >= 15 * 60 + 20 and key not in sent and eng.day == now.date():
+                sent.add(key)
+                cs = list(eng.calls.values()); taken = [c for c in cs if c.get("entry")]
+                done = [c for c in taken if c["status"] == "CLOSED"]
+                net = sum((c.get("pnl") or {}).get("net", 0) for c in taken)
+                skipped = [c for c in cs if c.get("shadow") and c["status"] != "ACTIVE"]
+                sk_hit = sum(1 for c in skipped if (c["shadow"].get("hits") or []))
+                lines = [f"KRT daily summary · {now:%d %b}", f"Calls taken: {len(taken)} · closed {len(done)} · net ₹{net:,.0f}"]
+                for c in taken: lines.append(f"  {c['contract']['name']} {c['reason']} ₹{(c.get('pnl') or {}).get('net', 0):,.0f}")
+                lines.append(f"Skipped by the filters: {len(skipped)} (of those, {sk_hit} would have reached T1)")
+                lines.append(f"Feed covered {eng.snapshot(now)['coverage']}% of the session.")
+                tg.send(f"digest|{key}", "\n".join(lines))
+            time.sleep(120)
+    threading.Thread(target=daily_digest, daemon=True).start()
+
     def eod_refresh():
         while True:
             time.sleep(3600)
