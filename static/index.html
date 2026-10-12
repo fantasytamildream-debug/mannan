@@ -154,14 +154,21 @@ tr.wl td:first-child{box-shadow:inset 3px 0 var(--amber)}
 .five{display:inline-block;font:700 13px var(--fc);padding:4px 10px;border-radius:3px;background:var(--panel);border:1px solid var(--line);color:var(--mute);margin:4px 0}
 .five.full{background:var(--amber);color:#1a1205;border-color:var(--amber)}
 @media (max-width:700px){#lvtbl table th:nth-child(n+9):nth-child(-n+13),#lvtbl table td:nth-child(n+9):nth-child(-n+13){display:none}}
+
+.sbar{margin:12px 16px 0;padding:12px 16px;border-radius:5px;border:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+.sbar b{font:700 19px var(--fc)}.sbar span{color:var(--mute);font-size:13.5px}
+.sbar.g{background:color-mix(in srgb,var(--ok) 13%,transparent);border-color:var(--ok)}
+.sbar.y{background:color-mix(in srgb,var(--amber) 13%,transparent);border-color:var(--amber)}
+.sbar.r{background:color-mix(in srgb,var(--pe) 11%,transparent);border-color:var(--pe)}
+.sbar.n{background:var(--panel)}
 </style></head><body>
 <header class="top">
  <div class="bar1"><div class="brand">KRT <b>Options</b> Terminal</div><span id="feed" class="feed disconnected">Connecting…</span>
   <div class="meta"><span id="clock"></span><span id="phase"></span><span id="nifty"></span></div>
   <div class="tools"><button class="ib" id="lang" aria-pressed="false" title="Explanation language">தமிழ்</button><button class="ib" id="snd" aria-pressed="false" title="Sound on new events">🔔 Sound</button></div></div>
- <nav class="tabs" role="tablist"><button data-t="calls" role="tab" aria-selected="true">Calls<span class="n" id="n-calls"></span></button><button data-t="idx" role="tab">Index<span class="n" id="n-idx"></span></button><button data-t="hist" role="tab">History</button><button data-t="near" role="tab">Near trigger<span class="n" id="n-near"></span></button><button data-t="jack" role="tab">🔥 Jackpot Watch<span class="n" id="n-jack"></span></button><button data-t="perf" role="tab">Performance</button><button data-t="levels" role="tab">Levels</button><button data-t="rules" role="tab">Rules</button></nav>
+ <nav class="tabs" role="tablist"><button data-t="calls" role="tab" aria-selected="true">Calls<span class="n" id="n-calls"></span></button><button data-t="idx" role="tab">Index<span class="n" id="n-idx"></span></button><button data-t="hist" role="tab">History</button><button data-t="near" role="tab">Near trigger<span class="n" id="n-near"></span></button><button data-t="jack" role="tab">🔥 Momentum Watch<span class="n" id="n-jack"></span></button><button data-t="perf" role="tab">Performance</button><button data-t="levels" role="tab">Levels</button><button data-t="rules" role="tab">Rules</button></nav>
 </header>
-<div id="alertbar" class="warnbar" hidden></div>
+<div id="alertbar" class="warnbar" hidden></div><div id="statusbar"></div>
 <main>
  <section id="calls"><div class="strip" id="strip"></div><div id="rank"></div><div class="chips" id="chips"></div><div id="callgrid"></div></section>
  <section id="idx" hidden>
@@ -171,7 +178,7 @@ tr.wl td:first-child{box-shadow:inset 3px 0 var(--amber)}
   <div class="panel pad"><div class="daynav"><button class="btn" id="d-prev" aria-label="Previous day">◀</button><input type="date" id="d-pick" class="s" aria-label="Pick a date"><button class="btn" id="d-next" aria-label="Next day">▶</button><button class="btn" id="d-today">Today</button><button class="btn" id="d-yest">Yesterday</button><span id="d-src"></span></div></div>
   <div class="strip" id="d-strip"></div><div id="d-body"></div></section>
  <section id="near" hidden><p class="note">Stocks from today's watchlist, closest to their trigger first. No entry until a 5-minute candle closes beyond the trigger and every check passes.</p><div id="neartop"></div><h3 style="margin:14px 0 8px">Everything on the watchlist</h3><div class="list" id="nearlist"></div></section>
- <section id="jack" hidden><div class="panel pad"><h3>🔥 High momentum watch <span class="pill am">jackpot</span></h3><p class="note">Setups with a tight 3-day range (coil) that can break out hard. A 🔥 call needs all five: coil, volume at 1.5× pace, first-5-minute range break, NIFTY in the same direction, and room to T1. This marks a stronger setup; it does <b>not</b> promise 2× or 5× and is not a win probability. Whether these filters actually help is tracked in Performance.</p></div><div class="grid" id="jackgrid"></div></section>
+ <section id="jack" hidden><div class="panel pad"><h3>🔥 Momentum watch <span class="pill am">strong-move candidates</span></h3><p class="note">Setups with a tight 3-day range (coil) that can break out hard. A 🔥 call needs all five: coil, volume at 1.5× pace, first-5-minute range break, NIFTY in the same direction, and room to T1. This marks a stronger setup; it does <b>not</b> promise 2× or 5× and is not a win probability. Whether these filters actually help is tracked in Performance.</p></div><div class="grid" id="jackgrid"></div></section>
  <section id="perf" hidden>
   <div class="panel pad"><h3>Forward calls (recorded live by this terminal)</h3><p class="note" id="perf-note"></p><div class="strip" id="perfstrip"></div>
    <div class="chips" id="perfchips"><button class="chip" data-p="all" aria-pressed="true">All calls</button><button class="chip" data-p="strong" aria-pressed="false">🔥 only</button><button class="chip" data-p="live" aria-pressed="false">Live only</button><button class="chip" data-p="replay" aria-pressed="false">Replay only</button><button class="chip" data-p="mine" aria-pressed="false">Trades I took</button></div>
@@ -188,7 +195,14 @@ tr.wl td:first-child{box-shadow:inset 3px 0 var(--amber)}
   <div><b>Strike</b>: planned option for watchlist stocks (delta ≈ 0.45, real contract, nearest expiry with ≥ 3 days left).</div>
   <div><b>Lot</b>: from the broker's contract list.</div></div></details></div>
   <div class="scroll" id="lvtbl"></div></div></section>
- <section id="rules" hidden><div class="panel pad" id="idxbox"></div><div class="panel pad" id="rulebox"></div></section>
+ <section id="rules" hidden>
+  <div class="panel pad"><h3>Risk calculator</h3><div class="form" style="padding:0;border:0">
+   <label>Capital ₹<input id="rc-cap" type="number" value="100000" step="5000"></label>
+   <label>Max risk per trade ₹<input id="rc-risk" type="number" value="2500" step="500"></label>
+   <label>Option entry ₹<input id="rc-e" type="number" value="20" step="0.05"></label>
+   <label>Option stop ₹<input id="rc-sl" type="number" value="14" step="0.05"></label>
+   <label>Lot size<input id="rc-lot" type="number" value="500" step="25"></label></div>
+   <div id="rc-out" class="note" style="margin-top:10px"></div></div><div class="panel pad" id="idxbox"></div><div class="panel pad" id="rulebox"></div></section>
 </main>
 <div id="toast" role="status" aria-live="polite"></div>
 <script>
@@ -221,7 +235,7 @@ function tickHeader(){const now=new Date(Date.now()+OFF),ist=new Date(now.getTim
   const h=fd.health,br=fd.broker||'';const since=Date.now()-FETCHED>15000?'disconnected':h;
   feed(since,since==='live'?`Live · ${br} · ${age}s ago`:since==='delayed'?`Delayed · ${br} · ${age}s old`:fd.error?'Disconnected · '+fd.error:'Disconnected');
   const m=ist.getHours()*60+ist.getMinutes(),wd=ist.getDay()>0&&ist.getDay()<6,c=ST.cfg;
-  $('#phase').textContent=ST.market_open?(m<toM(c.entry)?'Opening · entries from '+c.entry:m<toM(c.cut)?'Market open · entries allowed':m<toM(c.sq)?'No new entries after '+c.cut:'Square-off '+c.sq):(wd&&m<555?'Pre-open':'Market closed');
+  $('#phase').textContent=(ST.feed&&ST.feed.health==='disconnected')?'Feed unavailable · signals paused':ST.market_open?(m<toM(c.entry)?'Opening · entries from '+c.entry:m<toM(c.cut)?'Market open · entries allowed':m<toM(c.sq)?'No new entries after '+c.cut:'Square-off '+c.sq):(wd&&m<555?'Pre-open':'Market closed');
   if(ST.coverage!=null&&ST.market_open)$('#phase').textContent+=` · feed ${ST.coverage}% of session`;
   $('#nifty').innerHTML=ST.nifty?`NIFTY <b>${f2(ST.nifty.ltp)}</b> <span class="${ST.nifty.chg>=0?'up':'dn'}">${ST.nifty.chg==null?'':(ST.nifty.chg>=0?'+':'')+ST.nifty.chg.toFixed(2)+'%'}</span>`:''}
 const toM=s=>{const[a,b]=s.split(':');return +a*60+ +b};
@@ -292,14 +306,15 @@ function conviction(c){
     if(c.plan.risk_lot>ST.cfg.risk){s-=20;why.push('risk ₹'+Math.round(c.plan.risk_lot).toLocaleString('en-IN')+'/lot is over the limit')}
   }
   s=Math.max(0,Math.min(100,s));
-  const lab=s>=72?['Best setup','ok']:s>=58?['Strong','ok']:s>=44?['Average','am']:['Weak · manage tight','bad'];
+  const live=c.status==='ACTIVE';
+  const lab=s>=72?[live?'Best setup':'Top pick','ok']:s>=58?['Strong','ok']:s>=44?[live?'Average':'Mid priority','am']:[live?'Weak · manage tight':'Low priority','bad'];
   return {s,lab,why}}
 function rankList(){const L=ST.calls.filter(c=>['ACTIVE','BREAKOUT','NEAR'].includes(c.status));
   return L.map(c=>({c,v:conviction(c)})).sort((a,b)=>b.v.s-a.v.s)}
 function renderRank(){const R=rankList();
   if(!R.length){$('#rank').innerHTML='';return}
   const medal=i=>i===0?'🥇':i===1?'🥈':i===2?'🥉':'#'+(i+1);
-  $('#rank').innerHTML=`<div class="panel pad"><h3>${TA()?'இன்றைய calls ranking':'Today\'s calls, strongest first'}</h3>
+  $('#rank').innerHTML=`<div class="panel pad"><h3>${ST.calls.some(c=>c.status==='ACTIVE')?(TA()?'இன்றைய calls ranking':'Today\'s calls, strongest first'):(TA()?'Watchlist setups · வலிமை வரிசையில்':'Top watchlist setups (nothing bought yet)')}</h3>
    <p class="note">${TA()?'Setup தரம், volume, spread, இப்போதைய நிலை இவற்றை வைத்து வரிசை. இது win chance அல்ல.':'Ranked on setup quality, volume, option spread and how the trade is doing right now. This is a ranking of strength, not a win probability.'}</p>
    <div class="rk2">${R.map((x,i)=>{const c=x.c,o=c.opt||{},p=c.pnl||{},act=c.status==='ACTIVE';
      return `<div class="rkrow ${c.side.toLowerCase()}" data-goid="${c.id}"><span class="md">${medal(i)}</span>
@@ -307,22 +322,33 @@ function renderRank(){const R=rankList();
       <div class="lt">${act?(o.ltp!=null?'LTP ₹'+f2(o.ltp):'–'):(c.plan&&c.plan.ltp!=null?'LTP ₹'+f2(c.plan.ltp):'–')}<small>${act?`<span class="${(p.net||0)>=0?'up':'dn'}">${rs(p.net)}</span>`:'not bought yet'}</small></div>
       <div class="cv"><span class="pill ${x.v.lab[1]}">${x.v.lab[0]}</span><div class="meter"><i style="width:${x.v.s}%"></i></div><small>${x.v.s.toFixed(0)}/100${x.v.why.length?' · '+esc(x.v.why[0]):''}</small></div></div>`}).join('')}</div></div>`}
 
+
+function statusBar(){const C=ST.calls||[],act=C.filter(c=>c.status==='ACTIVE'),rdy=C.filter(c=>c.status==='BREAKOUT'),near=C.filter(c=>c.status==='NEAR');
+  const feed=ST.feed&&ST.feed.health;
+  let cls='n',txt='',sub='';
+  if(feed!=='live'){cls='r';txt='⚠️ Feed unavailable · signals paused';sub='Nothing is being tracked until the badge turns Live. Do not act on anything on screen.'}
+  else if(act.length){cls='g';txt=`🟢 ${act.length} active trade${act.length>1?'s':''}`;sub=act.map(c=>`${c.contract.name} · ₹${f2((c.opt||{}).ltp??c.entry.prem)} · ${rs((c.pnl||{}).net||0)}`).join(' · ')}
+  else if(rdy.length){cls='y';txt=`🟡 ${rdy.length} setup at the trigger`;sub='Waiting for the 5-minute candle to close. Do not buy early.'}
+  else if(near.length){cls='y';txt=`🟡 ${near.length} setup near the trigger`;sub=near.slice(0,3).map(c=>`${c.sym} ${c.side} ${f2(Math.abs(c.trig-(c.spot||c.trig)))} away`).join(' · ')}
+  else {cls='n';txt='⚪ No trade right now';sub=`${C.length} setups on the watchlist. A call appears only after a 5-minute candle closes beyond a trigger and every check passes.`}
+  $('#statusbar').innerHTML=`<div class="sbar ${cls}"><b>${txt}</b><span>${esc(sub)}</span></div>`}
+
 /* ---------------- calls ---------------- */
 const GROUPS={active:['ACTIVE'],near:['NEAR','BREAKOUT'],closed:['CLOSED'],skip:['BLOCKED','INVALID','EXPIRED'],watch:['WATCHING']};
 function render(){tickHeader();const C=ST.calls,cnt=k=>C.filter(c=>GROUPS[k].includes(c.status)).length;
   $('#n-calls').textContent=cnt('active')+cnt('closed')||'';$('#n-near').textContent=cnt('near')||'';$('#n-jack').textContent=C.filter(c=>c.parts.coil>=7.5).length||'';
   const taken=C.filter(c=>c.entry),net=taken.reduce((a,c)=>a+(c.pnl?c.pnl.net:0),0),wins=C.filter(c=>c.status==='CLOSED'&&c.pnl&&c.pnl.net>0).length,loss=C.filter(c=>c.status==='CLOSED'&&c.pnl&&c.pnl.net<=0).length;
-  $('#strip').innerHTML=[['Calls today',taken.length],['Active now',cnt('active')],['Closed · won / lost',`${wins} / ${loss}`],['Net today (after costs)',`<span class="${net>=0?'up':'dn'}">${rs(net)}</span>`],['Watching',`${cnt('watch')+cnt('near')} of ${C.length}`]].map(([a,b])=>`<div><small>${a}</small><b>${b}</b></div>`).join('');
-  $('#chips').innerHTML=[['active','Active'],['near','Near trigger'],['closed','Closed'],['skip','Not taken / invalid'],['watch','Watching']].map(([k,l])=>`<button class="chip" data-f="${k}" aria-pressed="${U.filter===k}">${l}<i>${cnt(k)}</i></button>`).join('');
+  $('#strip').innerHTML=[['Calls today',taken.length],['Active now',cnt('active')],['Closed · won / lost',`${wins} / ${loss}`],['Net today (after costs)',`<span class="${net>=0?'up':'dn'}">${rs(net)}</span>`],['Still waiting',`${cnt('watch')+cnt('near')} of ${C.length} on the watchlist`]].map(([a,b])=>`<div><small>${a}</small><b>${b}</b></div>`).join('');
+  $('#chips').innerHTML=[['active','Active'],['near','Near trigger'],['closed','Closed'],['skip','Not taken / invalid'],['watch','Not near yet']].map(([k,l])=>`<button class="chip" data-f="${k}" aria-pressed="${U.filter===k}">${l}<i>${cnt(k)}</i></button>`).join('');
   const L=C.filter(c=>GROUPS[U.filter].includes(c.status)).sort((a,b)=>(['active','near'].includes(U.filter)?conviction(b).s-conviction(a).s:0)||(b.entry?.t||'').localeCompare(a.entry?.t||'')||b.score-a.score);
   const alertbar=$('#alertbar');
   if(ST.storage==='temporary'){alertbar.hidden=false;alertbar.className='warnbar';
     alertbar.innerHTML=`<b>⚠️ Calls are not being saved.</b> They live in <code>${esc(ST.storage_path||'')}</code>, which Render wipes on every restart — that is why finished calls disappear. <b>Free fix:</b> add <code>GITHUB_REPO</code> and <code>GITHUB_TOKEN</code> in Render → Environment, and every call file is stored in your own repo. <b>Paid fix:</b> a Render disk at <code>/var/data</code> with <code>DATA_DIR=/var/data</code>.`}
   else if(ST.storage==='github'&&ST.market_open&&ST.feed.health==='live'&&!store.get('krt_gh_seen',0)){alertbar.hidden=false;alertbar.className='warnbar am';
-    alertbar.innerHTML=`<b>✅ Calls are saved to GitHub</b> (<code>${esc(ST.storage_path||'')}</code>), so they survive restarts. <button class="btn sm" id="gh-ok">Got it</button>`}
+    alertbar.innerHTML=`<b>✅ History is saved automatically</b> (<code>${esc(ST.storage_path||'')}</code>), so they survive restarts. <button class="btn sm" id="gh-ok">Got it</button>`}
   else if(ST.feed.health!=='live'&&ST.market_open){alertbar.hidden=false;alertbar.className='warnbar';alertbar.textContent=ST.feed.health==='delayed'?'Prices are delayed. Do not act on calls until the badge shows Live.':'Feed disconnected. Calls are frozen; check the server.'}else alertbar.hidden=true;
-  renderRank();
-  if(!L.length){$('#callgrid').innerHTML=U.filter==='active'?`<div class="empty"><b>${TA()?'இப்போது trade இல்லை':'No trade right now'}</b>${TA()?'எல்லா confirmations-ம் pass ஆன setup வந்தால் இங்கே தோன்றும்.':'A call appears here only when a 5-minute candle closes beyond a trigger and every check passes. Waiting is part of the plan.'}${cnt('near')?`<br><br><button class="btn" data-f="near">${cnt('near')} near trigger →</button>`:''}</div>`:'<div class="empty">Nothing here yet.</div>'}
+  statusBar();renderRank();
+  if(!L.length){$('#callgrid').innerHTML=U.filter==='active'?`<div class="empty"><b>${TA()?'இப்போது trade இல்லை':'No trade right now'}</b>${TA()?'எல்லா confirmations-ம் pass ஆன setup வந்தால் இங்கே தோன்றும்.':'A call appears here only when a 5-minute candle closes beyond a trigger and every check passes. Waiting is part of the plan.'}${cnt('near')?`<br><br><button class="btn" data-t2="near">${cnt('near')} near trigger →</button>`:''}</div>`:'<div class="empty">Nothing here yet.</div>'}
   else $('#callgrid').innerHTML=`<div class="grid">${L.map(c=>c.entry?card(c):mini(c)).join('')}</div>`;
   if(!$('#idx').hidden)renderIndex();if(!$('#near').hidden)renderNear();if(!$('#jack').hidden)renderJack();if(!$('#levels').hidden&&!$('#lvq').matches(':focus'))renderLevels()}
 function card(c){const e=c.entry,L=c.levels,k=c.contract,ce=c.side==='CE',live=c.status==='ACTIVE',o=c.opt||{},p=c.pnl||{},hits=Object.fromEntries(c.hits.map(h=>[h.name,h]));
@@ -465,7 +491,7 @@ function renderIndex(){const st=(ST&&ST.indexes)||{};
     rows.push(`<div class="row"><div><span class="s ${l&&l.side==='CE'?'ce':'pe'}">${name}</span><div class="note">${l?`${l.side||'inside the value area'}${l.score!=null?' · quality '+l.score:''}`:'no data from the broker'}</div></div>
       <div>${l&&l.trig?`<span class="pill mute">trigger ${f2(l.trig)}</span>`:''}</div>
       <div class="num">${l?f2(l.last):'–'}<br><span class="note">${l?'last close':''}</span></div>
-      <div class="why">${l?(l.side&&l.trend&&l.score>= (ST.cfg.min_score||60)?'Qualifies, but ranked out today.':l.side?`Not on today's watchlist: ${!l.trend?'trend not aligned':'quality '+l.score+' is below '+(ST.cfg.min_score||60)}.`:'Price is inside the 3-day value area — no side, no trade.'):(st[name]||'')}</div></div>`)}
+      <div class="why">${l?(l.side?`${!l.trend?'Trend not aligned with the '+l.side+' side':'Quality '+l.score+', below '+(ST.cfg.index_min||50)}. Value area ${f2(l.val)} – ${f2(l.vah)} · AVWAP ${f2(l.aw)}${l.trig?' · trigger '+f2(l.trig):''}`:`Price is inside the 3-day value area (${f2(l.val)} – ${f2(l.vah)}) — no side, no trade today.`):(st[name]||'waiting for the server to load this index')}</div></div>`)}
   $('#n-idx').textContent=cards.length||'';
   const note=`<p class="note" style="padding:0 2px 10px">Every index with a side gets a full plan here, even when its quality is below ${ST.cfg.min_score}. An entry still needs trend alignment and quality ≥ ${(ST.cfg.index_min||50)} — if it is below, the card will say so instead of turning green.</p>`;
   $('#idxbody').innerHTML=(cards.length?note+`<div class="grid">${cards.join('')}</div>`:'')+(rows.length?`<div class="panel" style="margin-top:14px"><div class="pad"><h3>Not trading today</h3></div><div class="list" style="border:0">${rows.join('')}</div></div>`:'')}
@@ -523,9 +549,10 @@ function renderLevels(){const box=$('#lvtbl'),st=box?box.scrollTop:0;setTimeout(
   const pick=new Set();if(nextS)for(const sd of['CE','PE'])LV.filter(r=>r.side===sd&&r.trend&&r.score>=(ST?ST.cfg.min_score:60)).sort((a,b)=>b.score-a.score).slice(0,10).forEach(r=>pick.add(r.sym));
   $('#lvtitle').textContent=nextS?'Levels for the next session':'Levels for today';
   $('#lvtbl').innerHTML='<table class="t"><thead><tr><th>Symbol</th><th class="n">Last</th><th class="n">VAL</th><th class="n">VAH</th><th class="n">AVWAP</th><th>Side</th><th>Trend</th><th class="n">Quality</th><th class="n">Trigger</th><th class="n">SL</th><th class="n">T1</th><th class="n">T2</th><th class="n">T3</th>'+(nextS?'<th>Watchlist</th>':'<th>Strike (planned)</th><th>Today</th>')+'<th class="n">Lot</th></tr></thead><tbody>'+R.map(r=>{const w=W[r.sym],p=w&&w.plan;return `<tr class="${w||pick.has(r.sym)?'wl':''}"><td><b>${r.sym}</b></td><td class="n">${f2(r.last)}</td><td class="n dn">${f2(r.val)}</td><td class="n up">${f2(r.vah)}</td><td class="n">${f2(r.aw)}</td><td class="${r.side==='CE'?'up':r.side==='PE'?'dn':''}">${r.side||'inside'}</td><td>${r.side?(r.trend?'aligned':'against'):''}</td><td class="n">${r.score??''}</td><td class="n">${r.trig?f2(r.trig):''}</td><td class="n">${r.sl?f2(r.sl):''}</td>${[0,1,2].map(i=>`<td class="n">${r.t?f2(r.t[i]):''}</td>`).join('')}${nextS?`<td>${pick.has(r.sym)?'<span class="pill am">next session</span>':''}</td>`:`<td>${p?esc(p.name)+(p.ltp!=null?' · ₹'+f2(p.ltp):''):''}</td><td>${w?`<span class="pill ${STAT[w.status][1]}">${STAT[w.status][0]}</span>`:''}</td>`}<td class="n">${r.lot??''}</td></tr>`}).join('')+'</tbody></table>'}
-function renderRules(){const c=ST?ST.cfg:{},ix=(ST&&ST.indexes)||{};
+function renderRules(){const c=(ST&&ST.cfg)||{risk:2500,min_score:60,spread:3,bar:5,entry:'09:25',cut:'15:00',sq:'15:15',vol_pace:1,min_opt_lots:20,delta:0.45,index_min:50},ix=(ST&&ST.indexes)||{};
   $('#idxbox').innerHTML=`<h3>Index calls (NIFTY · BANKNIFTY · FINNIFTY)</h3>${Object.keys(ix).length?`<table class="t"><tbody>${Object.entries(ix).map(([k,v])=>`<tr><td><b>${esc(k)}</b></td><td>${/ready/.test(v)?'✅':'✗'} ${esc(v)}</td></tr>`).join('')}</tbody></table>`:'<p class="note">This server build has no index support yet — upload the latest <code>server.py</code>, <code>brokers.py</code>, <code>strategy.py</code> and <code>engine.py</code>.</p>'}
    <p class="note">Indices use the same rulebook, with two differences: the exchange publishes no spot volume for an index, so that check is skipped, and AVWAP is a plain average instead of volume-weighted. SENSEX and BANKEX are BSE contracts and are <b>not</b> supported — Angel's NSE feed doesn't carry them here.</p>`;
+  riskCalc();
   $('#rulebox').innerHTML=`<h3>One rulebook for every call</h3>
  <p><b>1. Watchlist (before 09:15).</b> Stocks whose previous close is outside the 3-day value area, on the monthly-AVWAP side, with trend aligned (price above 20- and 50-day averages for CE, below for PE) and quality score ≥ ${c.min_score}. Quality score is a setup grade, not a win chance.</p>
  <p><b>2. Trigger.</b> Value-area edge ±0.5%, beyond yesterday's high (CE) or low (PE). The stop level is fixed the night before: back inside the value area, 0.4–0.8 ATR away.</p>
@@ -536,13 +563,22 @@ function renderRules(){const c=ST?ST.cfg:{},ix=(ST&&ST.indexes)||{};
  <p><b>7. Timing.</b> Entry time is the candle close. Target and stop times are the first price update that touched the level (every few seconds). If a stop and target both fall inside one update, the stop is counted.</p>
  <p class="note">Premiums marked ${SRC(false)} are Black-Scholes estimates; ${SRC(true)} means a traded or quoted price from your broker. Not investment advice.</p>`}
 
+function riskCalc(){const el=$('#rc-out');if(!el)return;const cap=+$('#rc-cap').value||0,lim=+$('#rc-risk').value||0,e=+$('#rc-e').value||0,sl=+$('#rc-sl').value||0,lot=+$('#rc-lot').value||0;
+  if(!(e>sl&&lot>0)){el.textContent='Enter an entry above the stop.';return}
+  const per=(e-sl)*lot,buy=e*lot,fr=40+buy*0.0005+buy*0.009+(buy*0.0005+40)*0.18,risk=per+fr,lots=Math.max(0,Math.floor(lim/risk)),cost=lots*buy;
+  el.innerHTML=`Risk per lot ≈ <b>${rs(risk)}</b> including costs and 0.9% slippage · premium per lot ${rs(buy)}<br>
+   With a ${rs(lim)} limit: <b>${lots} lot${lots===1?'':'s'}</b> → capital used ${rs(cost)}${cap?` (${(cost/cap*100).toFixed(1)}% of your capital)`:''}
+   ${lots===0?'<br><b class="dn">One lot already exceeds the limit — the terminal would skip this setup instead of tightening the stop.</b>':''}`}
+
 /* ---------------- copy call ---------------- */
 function callText(c){const e=c.entry,L=c.levels,k=c.contract;return `${c.strong?'🔥 ':''}KRT CALL · ${c.side==='CE'?'BUY CALL':'BUY PUT'}\n${k.name} (lot ${k.lot} × ${c.lots})\nEntry ₹${f2(e.prem)} – ${f2(e.chase)} at ${e.t} IST (don't buy above ${f2(e.chase)})\nSL spot ${f2(L.sl)} ≈ ₹${f2(L.est.sl)}\n${L.t.map((t,i)=>`T${i+1} spot ${f2(t)} ≈ ₹${f2(L.est.t[i])}`).join('\n')}\nExpiry ${k.expiry} · square-off ${ST.cfg.sq}\nQuality ${c.score.toFixed(0)}/100 (not a win chance) · Not investment advice`}
 
 /* ---------------- nav & events ---------------- */
 function go(t){$$('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));$$('main>section').forEach(s=>s.hidden=s.id!==t);
-  if(!ST)return;({calls:render,idx:renderIndex,hist:renderHist,near:renderNear,jack:renderJack,perf:renderPerf,levels:renderLevels,rules:renderRules})[t]()}
+  if(!ST){const sec=$('#'+t);if(sec&&!sec.dataset.filled)sec.insertAdjacentHTML('afterbegin','<div class="empty" data-wait><b>Waiting for the server</b>This page fills in as soon as the feed connects.</div>');return}
+  $$('[data-wait]').forEach(x=>x.remove());({calls:render,idx:renderIndex,hist:renderHist,near:renderNear,jack:renderJack,perf:renderPerf,levels:renderLevels,rules:renderRules})[t]()}
 document.addEventListener('click',e=>{const t=e.target.closest('nav.tabs button');if(t)return go(t.dataset.t);
+  const t2=e.target.closest('[data-t2]');if(t2)return go(t2.dataset.t2);
   const f=e.target.closest('[data-f]');if(f){U.filter=f.dataset.f;saveU();if($('#calls').hidden)go('calls');return render()}
   const p=e.target.closest('[data-p]');if(p){U.pf=p.dataset.p;saveU();return renderPerf()}
   const gi=e.target.closest('[data-goid]');if(gi){const el=document.querySelector(`[data-copy="${gi.dataset.goid}"]`);if(el)el.closest('.card').scrollIntoView({behavior:'smooth',block:'center'});return}
@@ -555,6 +591,7 @@ document.addEventListener('change',e=>{const m=e.target.closest('[data-mine]');i
 $('#lang').onclick=()=>{U.lang=U.lang==='en'?'ta':'en';saveU();$('#lang').setAttribute('aria-pressed',TA());$('#lang').textContent=TA()?'English':'தமிழ்';render()};
 $('#snd').onclick=()=>{U.sound=!U.sound;saveU();$('#snd').setAttribute('aria-pressed',U.sound);if(U.sound){beep('entry');if('Notification'in window&&Notification.permission==='default')Notification.requestPermission()}};
 $('#lvq').oninput=renderLevels;
+['rc-cap','rc-risk','rc-e','rc-sl','rc-lot'].forEach(id=>{const el=$('#'+id);if(el)el.oninput=riskCalc});
 $('#lang').setAttribute('aria-pressed',TA());$('#lang').textContent=TA()?'English':'தமிழ்';$('#snd').setAttribute('aria-pressed',U.sound);
 poll();once();slow();setInterval(poll,2000);setInterval(slow,30000);setInterval(tickHeader,1000);
 </script></body></html>
